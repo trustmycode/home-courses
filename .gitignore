@@ -47,6 +47,14 @@ next-env.d.ts
 # wrangler files
 .wrangler
 .dev.vars*
-
-
 !.dev.vars.example
+
+# media files (large video/audio files in course folders)
+# Note: .ts video files (not TypeScript source files)
+**/Анна Владимировна. Стоп Тревога/*.ts
+**/Анна Владимировна. Стоп Тревога/*.mp4
+**/Анна Владимировна. Стоп Тревога/*.mp3
+**/Анна Владимировна. Стоп Тревога/*.mov
+**/Анна Владимировна. Стоп Тревога/*.avi
+**/Анна Владимировна. Стоп Тревога/*.mkv
+**/Анна Владимировна. Стоп Тревога/*.webm
