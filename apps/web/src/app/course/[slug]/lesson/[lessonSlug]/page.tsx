@@ -2,9 +2,10 @@ import Link from "next/link";
 import { loadLesson, loadCourse } from "@/lib/content";
 import { renderMarkdownFromRepoPath } from "@/lib/markdown";
 
-export default async function LessonPage({ params }: { params: { slug: string; lessonSlug: string } }) {
-  const course = await loadCourse(params.slug);
-  const lesson = await loadLesson(params.slug, params.lessonSlug);
+export default async function LessonPage({ params }: { params: Promise<{ slug: string; lessonSlug: string }> }) {
+  const { slug, lessonSlug } = await params;
+  const course = await loadCourse(slug);
+  const lesson = await loadLesson(slug, lessonSlug);
   if (!course || !lesson) return <main style={{ padding: 24 }}>Lesson not found</main>;
 
   const html = await renderMarkdownFromRepoPath(lesson.textPath);

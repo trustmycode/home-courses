@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { loadCourse } from "@/lib/content";
 
-export default async function CoursePage({ params }: { params: { slug: string } }) {
-  const course = await loadCourse(params.slug);
+export default async function CoursePage({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const course = await loadCourse(slug);
   if (!course) return <main style={{ padding: 24 }}>Course not found</main>;
 
   return (
