@@ -76,3 +76,6 @@ next-env.d.ts
 **/.vscode/
 *.DS_Store
 **/*.DS_Store
+
+# legacy
+**/legacy/
