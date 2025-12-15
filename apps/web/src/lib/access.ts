@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 
-export function getUserEmail(): string {
-  const h = headers();
+export async function getUserEmail(): Promise<string> {
+  const h = await headers();
 
   const email = h.get("Cf-Access-Authenticated-User-Email");
 

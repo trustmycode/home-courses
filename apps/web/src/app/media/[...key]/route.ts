@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
-export async function GET(_: Request, { params }: { params: { key: string[] } }) {
+export async function GET(_: Request, { params }: { params: Promise<{ key: string[] }> }) {
   const { env } = getCloudflareContext();
 
-  const key = params.key.join("/");
+  const { key: keyArray } = await params;
+  const key = keyArray.join("/");
 
   const obj = await env.COURSE_MEDIA.get(key);
 

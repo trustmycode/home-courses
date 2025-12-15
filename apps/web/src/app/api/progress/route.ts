@@ -6,7 +6,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 export async function GET(req: Request) {
   const { env } = getCloudflareContext();
-  const email = getUserEmail();
+  const email = await getUserEmail();
 
   const url = new URL(req.url);
   const courseSlug = url.searchParams.get("courseSlug");
@@ -24,9 +24,14 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const { env } = getCloudflareContext();
-  const email = getUserEmail();
+  const email = await getUserEmail();
 
-  const body = await req.json();
+  const body = (await req.json()) as {
+    courseSlug?: string;
+    lessonSlug?: string;
+    positionSec?: number;
+    isCompleted?: boolean;
+  };
   const { courseSlug, lessonSlug, positionSec = 0, isCompleted = false } = body ?? {};
 
   if (!courseSlug || !lessonSlug) {
