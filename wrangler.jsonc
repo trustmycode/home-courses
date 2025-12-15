@@ -34,7 +34,22 @@
 	],
 	"observability": {
 		"enabled": true
-	}
+	},
+	"d1_databases": [
+		{
+			"binding": "course_db",
+			"database_name": "course-db",
+			"database_id": "2cf93440-3133-45f8-8329-3e88fb9de80b",
+			"remote": true
+		}
+	],
+	"r2_buckets": [
+		{
+			"bucket_name": "course-media",
+			"binding": "course_media",
+			"remote": true
+		}
+	]
 	/**
 	 * Smart Placement
 	 * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
