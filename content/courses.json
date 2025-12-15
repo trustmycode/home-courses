@@ -1,0 +1,27 @@
+{
+  "courses": [
+    {
+      "slug": "01-anna-vladimirovna-stop-trevoga",
+      "title": "Стоп Тревога",
+      "description": "Практикум Стоп-тревога от невролога Анны Владимировны",
+      "lessons": [
+        {
+          "slug": "01-lesson",
+          "title": "01. Введение",
+          "durationSec": 600,
+          "videoKey": "test/file.mp4",
+          "audioKey": null,
+          "textPath": "content/demo-course/lessons/01-intro.mdx"
+        },
+        {
+          "slug": "02-lesson",
+          "title": "02. Урок",
+          "durationSec": 900,
+          "videoKey": null,
+          "audioKey": null,
+          "textPath": "content/demo-course/lessons/02-lesson.mdx"
+        }
+      ]
+    }
+  ]
+}
