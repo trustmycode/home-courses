@@ -37,7 +37,7 @@
 	},
 	"d1_databases": [
 		{
-			"binding": "course_db",
+			"binding": "COURSE_DB",
 			"database_name": "course-db",
 			"database_id": "2cf93440-3133-45f8-8329-3e88fb9de80b",
 			"remote": true
@@ -46,7 +46,7 @@
 	"r2_buckets": [
 		{
 			"bucket_name": "course-media",
-			"binding": "course_media",
+			"binding": "COURSE_MEDIA",
 			"remote": true
 		}
 	]
