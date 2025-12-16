@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { loadLesson, loadCourse, loadLessonAssets } from "@/lib/content";
 import { loadMdx } from "@/lib/markdown";
+import { mediaUrl, processMediaUrlsInHtml } from "@/lib/media";
 
 export const dynamic = 'force-dynamic';
 
@@ -17,10 +18,12 @@ export default async function LessonPage({
     return <main style={{ padding: 24 }}>Lesson not found</main>;
   }
 
-  const [html, assets] = await Promise.all([
+  const [rawHtml, assets] = await Promise.all([
     loadMdx(lesson.contentKey),
     loadLessonAssets(lesson.assetsKey),
   ]);
+
+  const html = processMediaUrlsInHtml(rawHtml);
 
   const firstVideo = Object.values(assets.assets).find(
     (asset) => asset.type === "video"
@@ -43,7 +46,7 @@ export default async function LessonPage({
               borderRadius: 12,
               border: "1px solid #ddd",
             }}
-            src={`/media/${firstVideo.r2Key}`}
+            src={mediaUrl(firstVideo.r2Key)}
           />
         </div>
       ) : (
