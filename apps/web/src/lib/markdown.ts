@@ -2,7 +2,7 @@ import { marked } from "marked";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 export async function loadMdx(contentKey: string): Promise<string> {
-  const { env } = getCloudflareContext();
+  const { env } = await getCloudflareContext({ async: true });
   const obj = await env.COURSE_MEDIA.get(contentKey);
 
   if (!obj) {

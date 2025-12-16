@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
-
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
-export async function GET(_: Request, { params }: { params: Promise<{ key: string[] }> }) {
-  const { env } = getCloudflareContext();
+export async function GET(
+  _: Request,
+  { params }: { params: Promise<{ key: string[] }> }
+) {
+  const { env } = await getCloudflareContext({ async: true });
 
   const { key: keyArray } = await params;
   const key = keyArray.join("/");
@@ -14,9 +16,9 @@ export async function GET(_: Request, { params }: { params: Promise<{ key: strin
 
   return new Response(obj.body, {
     headers: {
-      "Content-Type": obj.httpMetadata?.contentType || "application/octet-stream",
+      "Content-Type":
+        obj.httpMetadata?.contentType || "application/octet-stream",
       "Cache-Control": "private, max-age=300",
     },
   });
 }
-

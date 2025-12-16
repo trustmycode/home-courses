@@ -37,7 +37,7 @@ let indexCache: CoursesIndex | null = null;
 export async function loadIndex(): Promise<CoursesIndex> {
   if (indexCache) return indexCache;
 
-  const { env } = getCloudflareContext();
+  const { env } = await getCloudflareContext({ async: true });
   const obj = await env.COURSE_MEDIA.get("courses/index.json");
 
   if (!obj) {
@@ -73,7 +73,7 @@ export async function loadLesson(
 export async function loadLessonAssets(
   assetsKey: string
 ): Promise<LessonAssets> {
-  const { env } = getCloudflareContext();
+  const { env } = await getCloudflareContext({ async: true });
   const obj = await env.COURSE_MEDIA.get(assetsKey);
 
   if (!obj) {
