@@ -1,38 +1,20 @@
-import fs from "node:fs/promises";
-import path from "node:path";
 import { marked } from "marked";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
-async function findRepoRoot(startPath: string): Promise<string> {
-  let current = path.resolve(startPath);
-  
-  while (current !== path.dirname(current)) {
-    const contentPath = path.join(current, "content", "courses.json");
-    try {
-      await fs.access(contentPath);
-      return current;
-    } catch {
-      // Continue searching
-    }
-    current = path.dirname(current);
+export async function loadMdx(contentKey: string): Promise<string> {
+  const { env } = getCloudflareContext();
+  const obj = await env.COURSE_MEDIA.get(contentKey);
+
+  if (!obj) {
+    throw new Error(`MDX file not found in R2: ${contentKey}`);
   }
-  
-  throw new Error("Could not find repo root (content/courses.json)");
-}
 
-let repoRootCache: string | null = null;
-
-async function getRepoRoot(): Promise<string> {
-  if (repoRootCache) return repoRootCache;
-  
-  const startPath = process.cwd();
-  repoRootCache = await findRepoRoot(startPath);
-  return repoRootCache;
-}
-
-export async function renderMarkdownFromRepoPath(repoRelativePath: string): Promise<string> {
-  // repoRelativePath вроде "content/demo-course/lessons/01-intro.mdx"
-  const repoRoot = await getRepoRoot();
-  const fullPath = path.join(repoRoot, repoRelativePath);
-  const raw = await fs.readFile(fullPath, "utf-8");
+  const raw = await obj.text();
   return marked.parse(raw);
+}
+
+export async function renderMarkdownFromRepoPath(
+  repoRelativePath: string
+): Promise<string> {
+  return loadMdx(repoRelativePath);
 }
