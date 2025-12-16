@@ -20,3 +20,7 @@ export const MEDIA_WORKER_ORIGIN = "https://home-courses-media.ourhomecources.wo
 // Paths
 export const MEDIA_PATH_PREFIX = "/media";
 
+// Cloudflare Access Service Token (для server-to-server авторизации)
+export const CF_ACCESS_CLIENT_ID_ENV = "CF_ACCESS_CLIENT_ID";
+export const CF_ACCESS_CLIENT_SECRET_ENV = "CF_ACCESS_CLIENT_SECRET";
+
