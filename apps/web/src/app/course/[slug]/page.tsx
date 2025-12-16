@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { loadCourse } from "@/lib/content";
 
+export const dynamic = 'force-dynamic';
+
 export default async function CoursePage({
   params,
 }: {

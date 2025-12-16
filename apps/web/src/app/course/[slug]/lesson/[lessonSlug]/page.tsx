@@ -2,6 +2,8 @@ import Link from "next/link";
 import { loadLesson, loadCourse, loadLessonAssets } from "@/lib/content";
 import { loadMdx } from "@/lib/markdown";
 
+export const dynamic = 'force-dynamic';
+
 export default async function LessonPage({
   params,
 }: {
