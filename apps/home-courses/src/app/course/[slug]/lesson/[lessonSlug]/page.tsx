@@ -1,16 +1,18 @@
 import Link from "next/link";
 import { loadLesson, loadCourse, loadLessonAssets } from "@/lib/content";
-import { loadMdx } from "@/lib/markdown";
+import { loadHtml } from "@/lib/markdown";
 import { mediaUrl, processMediaUrlsInHtml } from "@/lib/media";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 export default async function LessonPage({
   params,
 }: {
   params: Promise<{ slug: string; lessonSlug: string }>;
 }) {
-  const { slug, lessonSlug } = await params;
+  const { slug, lessonSlug: rawLessonSlug } = await params;
+  // Нормализуем lessonSlug: убираем префикс "lesson/" если он есть
+  const lessonSlug = rawLessonSlug.replace(/^lesson\//, "");
   const course = await loadCourse(slug);
   const lesson = await loadLesson(slug, lessonSlug);
 
@@ -19,7 +21,7 @@ export default async function LessonPage({
   }
 
   const [rawHtml, assets] = await Promise.all([
-    loadMdx(lesson.contentKey),
+    loadHtml(lesson.contentHtmlKey),
     loadLessonAssets(lesson.assetsKey),
   ]);
 

@@ -9,8 +9,8 @@ export async function getUserEmail(): Promise<string> {
     return process.env.DEV_USER_EMAIL ?? "developer@localhost";
   }
 
-  if (!email) throw new Error("Unauthorized: no Cloudflare Access email header");
+  if (!email)
+    throw new Error("Unauthorized: no Cloudflare Access email header");
 
   return email;
 }
-

@@ -4,7 +4,8 @@ export type LessonMeta = {
   slug: string;
   title: string;
   order?: number;
-  contentKey: string;
+  contentHtmlKey: string;
+  contentMdxKey?: string;
   assetsKey: string;
 };
 
@@ -32,10 +33,16 @@ export type LessonAssets = {
   assets: Record<string, AssetMeta>;
 };
 
-let indexCache: CoursesIndex | null = null;
-
 export async function loadIndex(): Promise<CoursesIndex> {
-  if (indexCache) return indexCache;
+  // Используем Cache API для кэширования индекса
+  const cacheKey = new Request("https://internal/courses/index.json");
+  const cache = await caches.open("courses-index");
+  const cached = await cache.match(cacheKey);
+
+  if (cached) {
+    const cachedData = await cached.json();
+    return cachedData as CoursesIndex;
+  }
 
   const { env } = await getCloudflareContext({ async: true });
   const obj = await env.COURSE_MEDIA.get("courses/index.json");
@@ -45,8 +52,18 @@ export async function loadIndex(): Promise<CoursesIndex> {
   }
 
   const text = await obj.text();
-  indexCache = JSON.parse(text) as CoursesIndex;
-  return indexCache;
+  const index = JSON.parse(text) as CoursesIndex;
+
+  // Кэшируем на 5 минут
+  const response = new Response(JSON.stringify(index), {
+    headers: {
+      "Content-Type": "application/json",
+      "Cache-Control": "public, max-age=300",
+    },
+  });
+  await cache.put(cacheKey, response.clone());
+
+  return index;
 }
 
 export async function loadCourses(): Promise<CourseMeta[]> {

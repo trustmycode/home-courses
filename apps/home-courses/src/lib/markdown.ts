@@ -1,20 +1,18 @@
-import { marked } from "marked";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
-export async function loadMdx(contentKey: string): Promise<string> {
+export async function loadHtml(contentHtmlKey: string): Promise<string> {
   const { env } = await getCloudflareContext({ async: true });
-  const obj = await env.COURSE_MEDIA.get(contentKey);
+  const obj = await env.COURSE_MEDIA.get(contentHtmlKey);
 
   if (!obj) {
-    throw new Error(`MDX file not found in R2: ${contentKey}`);
+    throw new Error(`HTML file not found in R2: ${contentHtmlKey}`);
   }
 
-  const raw = await obj.text();
-  return marked.parse(raw);
+  // Возвращаем готовый HTML, без парсинга
+  return await obj.text();
 }
 
-export async function renderMarkdownFromRepoPath(
-  repoRelativePath: string
-): Promise<string> {
-  return loadMdx(repoRelativePath);
+// Оставляем для обратной совместимости, если нужно
+export async function loadMdx(contentKey: string): Promise<string> {
+  return loadHtml(contentKey);
 }
