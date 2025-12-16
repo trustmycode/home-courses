@@ -5,11 +5,13 @@
 	"scripts": {
 		"dev": "next dev --turbopack",
 		"build": "next build",
+		"postbuild": "node scripts/fix-standalone-path.mjs",
 		"start": "next start",
 		"lint": "next lint",
-		"deploy": "opennextjs-cloudflare build && wrangler deploy",
-		"upload": "opennextjs-cloudflare build && wrangler deploy --dry-run",
-		"preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+		"build:opennext": "pnpm run build && opennextjs-cloudflare build --skipNextBuild",
+		"deploy": "pnpm run build:opennext && wrangler deploy",
+		"upload": "pnpm run build:opennext && wrangler deploy --dry-run",
+		"preview": "pnpm run build:opennext && opennextjs-cloudflare preview",
 		"cf-typegen": "wrangler types --env-interface CloudflareEnv ./cloudflare-env.d.ts"
 	},
 	"dependencies": {
