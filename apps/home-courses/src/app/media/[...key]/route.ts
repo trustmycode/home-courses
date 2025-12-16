@@ -30,9 +30,9 @@ export async function GET(
 	pick(req, "if-match", h);
 	pick(req, "if-unmodified-since", h);
 
-	// ✅ Access Service Token (server-to-server)
-	const clientId = (env as any)[CF_ACCESS_CLIENT_ID_ENV];
-	const clientSecret = (env as any)[CF_ACCESS_CLIENT_SECRET_ENV];
+	const envVars = env as unknown as Record<string, unknown>;
+	const clientId = envVars[CF_ACCESS_CLIENT_ID_ENV] as string | undefined;
+	const clientSecret = envVars[CF_ACCESS_CLIENT_SECRET_ENV] as string | undefined;
 
 	if (clientId && clientSecret) {
 		h.set("CF-Access-Client-Id", clientId);
