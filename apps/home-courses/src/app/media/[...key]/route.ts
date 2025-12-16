@@ -1,7 +1,5 @@
 import { MEDIA_WORKER_ORIGIN, MEDIA_PATH_PREFIX } from "@/lib/constants";
 
-export const runtime = "edge";
-
 function pick(req: Request, name: string, out: Headers) {
 	const v = req.headers.get(name);
 	if (v) out.set(name, v);
