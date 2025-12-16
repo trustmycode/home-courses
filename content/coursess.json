@@ -1,12 +1,12 @@
 {
   "courses": [
     {
-      "slug": "demo-course",
-      "title": "Demo Course",
-      "description": "Курс для проверки курса-ридера",
+      "slug": "01-anna-vladimirovna-stop-trevoga",
+      "title": "Стоп Тревога",
+      "description": "Практикум Стоп-тревога от невролога Анны Владимировны",
       "lessons": [
         {
-          "slug": "01-intro",
+          "slug": "01-lesson",
           "title": "01. Введение",
           "durationSec": 600,
           "videoKey": "test/file.mp4",
@@ -25,4 +25,3 @@
     }
   ]
 }
-
