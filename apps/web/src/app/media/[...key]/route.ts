@@ -26,7 +26,7 @@ function tryParseRange(rangeHeader: string | null): R2Range | undefined {
   return undefined;
 }
 
-function computeContentRange(range: any, size: number) {
+function computeContentRange(range: R2Range, size: number) {
   const offset = "offset" in range ? range.offset : undefined;
   const length = "length" in range ? range.length : undefined;
   const suffix = "suffix" in range ? range.suffix : undefined;
@@ -54,10 +54,11 @@ function computeContentRange(range: any, size: number) {
 
 export async function GET(
   req: Request,
-  { params }: { params: { key: string[] } }
+  { params }: { params: Promise<{ key: string[] }> }
 ) {
   const { env } = await getCloudflareContext({ async: true });
-  const key = params.key.join("/");
+  const { key: keyArray } = await params;
+  const key = keyArray.join("/");
 
   const range = tryParseRange(req.headers.get("Range"));
 
