@@ -14,13 +14,6 @@ export const CACHE_NAME_INDEX = "courses-index";
 export const CACHE_KEY_INDEX = "https://internal/courses/index.json";
 export const CACHE_MAX_AGE_INDEX = 300; // 5 минут
 
-// Media Worker
-export const MEDIA_WORKER_ORIGIN = "https://home-courses-media.ourhomecources.workers.dev";
-
 // Paths
 export const MEDIA_PATH_PREFIX = "/media";
-
-// Cloudflare Access Service Token (для server-to-server авторизации)
-export const CF_ACCESS_CLIENT_ID_ENV = "CF_ACCESS_CLIENT_ID";
-export const CF_ACCESS_CLIENT_SECRET_ENV = "CF_ACCESS_CLIENT_SECRET";
 

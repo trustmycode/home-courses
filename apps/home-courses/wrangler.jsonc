@@ -27,6 +27,10 @@
       // see https://opennext.js.org/cloudflare/caching
       "binding": "WORKER_SELF_REFERENCE",
       "service": "home-courses"
+    },
+    {
+      "binding": "MEDIA",
+      "service": "home-courses-media"
     }
   ],
   "observability": {
@@ -48,7 +52,6 @@
     }
   ],
   "vars": {
-    "CF_ACCESS_CLIENT_ID": "b26b3a683431e6b611a1140f218d2b2c.access",
     "NEXT_PUBLIC_MEDIA_BASE_URL": "https://home-courses-media.ourhomecources.workers.dev"
   }
   /**

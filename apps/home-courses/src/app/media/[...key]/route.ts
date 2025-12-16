@@ -1,10 +1,5 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import {
-	MEDIA_WORKER_ORIGIN,
-	MEDIA_PATH_PREFIX,
-	CF_ACCESS_CLIENT_ID_ENV,
-	CF_ACCESS_CLIENT_SECRET_ENV,
-} from "@/lib/constants";
+import { MEDIA_PATH_PREFIX } from "@/lib/constants";
 
 function pick(req: Request, name: string, out: Headers) {
 	const v = req.headers.get(name);
@@ -20,8 +15,6 @@ export async function GET(
 	const { key: keyArray } = await params;
 	const key = keyArray.join("/");
 
-	const upstream = `${MEDIA_WORKER_ORIGIN}${MEDIA_PATH_PREFIX}/${key}`;
-
 	const h = new Headers();
 	// Range/ETag preconditions
 	pick(req, "range", h);
@@ -30,20 +23,10 @@ export async function GET(
 	pick(req, "if-match", h);
 	pick(req, "if-unmodified-since", h);
 
-	const envVars = env as unknown as Record<string, unknown>;
-	const clientId = envVars[CF_ACCESS_CLIENT_ID_ENV] as string | undefined;
-	const clientSecret = envVars[CF_ACCESS_CLIENT_SECRET_ENV] as string | undefined;
+	// ВАЖНО: host тут не важен, это внутренний вызов через Service Binding
+	const upstreamUrl = `https://media.internal${MEDIA_PATH_PREFIX}/${key}`;
 
-	if (clientId && clientSecret) {
-		h.set("CF-Access-Client-Id", clientId);
-		h.set("CF-Access-Client-Secret", clientSecret);
-	}
-
-	const res = await fetch(upstream, {
-		method: "GET",
-		headers: h,
-		redirect: "manual", // Не проглатывать редиректы
-	});
+	const res = await env.MEDIA.fetch(upstreamUrl, { method: "GET", headers: h });
 
 	const out = new Headers();
 

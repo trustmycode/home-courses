@@ -4,9 +4,10 @@
 declare namespace Cloudflare {
 	interface Env {
 		NEXTJS_ENV: string;
-		WORKER_SELF_REFERENCE: Fetcher /* web */;
+		WORKER_SELF_REFERENCE: Fetcher /* home-courses */;
 		IMAGES: ImagesBinding;
 		ASSETS: Fetcher;
+		MEDIA: Fetcher /* home-courses-media */;
 	}
 }
 interface CloudflareEnv extends Cloudflare.Env {
