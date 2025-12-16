@@ -1,5 +1,7 @@
-import Link from "next/link";
 import { loadCourse } from "@/lib/content";
+import { Header } from "@/components/layout/Header";
+import { Breadcrumbs } from "@/components/layout/Breadcrumbs";
+import { LessonCard } from "@/components/lesson/LessonCard";
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +12,16 @@ export default async function CoursePage({
 }) {
   const { slug } = await params;
   const course = await loadCourse(slug);
-  if (!course) return <main style={{ padding: 24 }}>Course not found</main>;
+  if (!course) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="container mx-auto px-4 py-8">
+          <p className="text-muted-foreground">Course not found</p>
+        </main>
+      </div>
+    );
+  }
 
   const sortedLessons = [...course.lessons].sort((a, b) => {
     if (a.order !== undefined && b.order !== undefined) {
@@ -20,24 +31,44 @@ export default async function CoursePage({
   });
 
   return (
-    <main style={{ padding: 24, maxWidth: 900, margin: "0 auto" }}>
-      <Link href="/">← Back to courses</Link>
+    <div className="min-h-screen bg-background">
+      <Header />
+      
+      <main className="container mx-auto px-4 py-8 lg:py-12 max-w-6xl">
+        {/* Breadcrumbs */}
+        <Breadcrumbs 
+          items={[
+            { label: "Courses", href: "/" },
+            { label: course.title }
+          ]}
+          className="mb-6"
+        />
 
-      <h1 style={{ fontSize: 28, fontWeight: 700, marginTop: 12 }}>
-        {course.title}
-      </h1>
-      <p style={{ opacity: 0.7 }}>{course.description ?? ""}</p>
+        {/* Course header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-foreground mb-2">
+            {course.title}
+          </h1>
+          {course.description && (
+            <p className="text-muted-foreground">{course.description}</p>
+          )}
+        </div>
 
-      <h2 style={{ fontSize: 18, fontWeight: 700, marginTop: 24 }}>Lessons</h2>
-      <ul style={{ marginTop: 12, paddingLeft: 18 }}>
-        {sortedLessons.map((l) => (
-          <li key={l.slug} style={{ marginBottom: 10 }}>
-            <Link href={`/course/${course.slug}/lesson/${l.slug}`}>
-              {l.title}
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </main>
+        {/* Lessons */}
+        <div>
+          <h2 className="text-xl font-semibold text-foreground mb-4">Lessons</h2>
+          <div className="grid gap-4">
+            {sortedLessons.map((lesson, index) => (
+              <LessonCard 
+                key={lesson.slug} 
+                lesson={lesson}
+                courseSlug={course.slug}
+                lessonNumber={index + 1}
+              />
+            ))}
+          </div>
+        </div>
+      </main>
+    </div>
   );
 }
