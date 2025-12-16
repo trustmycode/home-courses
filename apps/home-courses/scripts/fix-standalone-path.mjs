@@ -22,7 +22,7 @@ const projectRoot = join(__dirname, "..");
 const standaloneDir = join(projectRoot, ".next", "standalone");
 
 // Функция для поиска .next директории в standalone
-function findNextDir(startPath, maxDepth = 5, currentDepth = 0) {
+function findNextDir(startPath, expectedPath, maxDepth = 5, currentDepth = 0) {
 	if (!existsSync(startPath) || currentDepth > maxDepth) {
 		return null;
 	}
@@ -30,9 +30,14 @@ function findNextDir(startPath, maxDepth = 5, currentDepth = 0) {
 	// Проверяем текущую директорию
 	const nextPath = join(startPath, ".next");
 	if (existsSync(nextPath) && statSync(nextPath).isDirectory()) {
-		const serverPath = join(nextPath, "server", "pages-manifest.json");
-		if (existsSync(serverPath)) {
-			return nextPath;
+		// Пропускаем целевой путь (куда мы копируем)
+		if (nextPath === expectedPath) {
+			// Продолжаем поиск в поддиректориях
+		} else {
+			const serverPath = join(nextPath, "server", "pages-manifest.json");
+			if (existsSync(serverPath)) {
+				return nextPath;
+			}
 		}
 	}
 
@@ -41,7 +46,7 @@ function findNextDir(startPath, maxDepth = 5, currentDepth = 0) {
 		const entries = readdirSync(startPath, { withFileTypes: true });
 		for (const entry of entries) {
 			if (entry.isDirectory() && !entry.name.startsWith(".")) {
-				const found = findNextDir(join(startPath, entry.name), maxDepth, currentDepth + 1);
+				const found = findNextDir(join(startPath, entry.name), expectedPath, maxDepth, currentDepth + 1);
 				if (found) {
 					return found;
 				}
@@ -62,17 +67,28 @@ if (!existsSync(standaloneDir)) {
 	process.exit(0); // Не критичная ошибка, просто пропускаем
 }
 
-// Находим реальную структуру динамически
-const actualPath = findNextDir(standaloneDir);
+// Определяем ожидаемый путь (куда мы будем копировать)
 const expectedPath = join(standaloneDir, ".next");
+
+// Находим реальную структуру динамически (исключая целевой путь)
+const actualPath = findNextDir(standaloneDir, expectedPath);
 
 console.log("🔧 Исправление структуры standalone для OpenNext...");
 
+// Если actualPath не найден, возможно, файлы уже скопированы
 if (!actualPath) {
+	if (existsSync(expectedPath)) {
+		const serverPath = join(expectedPath, "server", "pages-manifest.json");
+		if (existsSync(serverPath)) {
+			console.log(`   Структура уже исправлена (файлы уже скопированы), пропускаем`);
+			console.log("✅ Структура уже исправлена для OpenNext");
+			process.exit(0);
+		}
+	}
 	console.warn("⚠️  .next директория не найдена в standalone.");
 	console.warn("   Возможно, outputFileTracingRoot не используется или структура изменилась.");
 	console.warn("   Пропускаем исправление пути.");
-	process.exit(0); // Не критичная ошибка, просто пропускаем
+	process.exit(0);
 }
 
 console.log(`   Реальный путь: ${actualPath}`);
@@ -83,31 +99,41 @@ if (!existsSync(dirname(expectedPath))) {
 	mkdirSync(dirname(expectedPath), { recursive: true });
 }
 
-// Если ожидаемый путь уже существует, проверяем, не является ли он симлинком на тот же путь
+// Если ожидаемый путь уже существует, проверяем, не является ли он уже правильным
 if (existsSync(expectedPath)) {
-	try {
-		const stats = lstatSync(expectedPath);
-		if (stats.isSymbolicLink()) {
-			// Проверяем, куда ведет симлинк
-			const linkTarget = readlinkSync(expectedPath);
-			const resolvedTarget = join(dirname(expectedPath), linkTarget);
-			// Нормализуем пути для сравнения
-			const normalizedActual = join(actualPath);
-			const normalizedTarget = join(resolvedTarget);
-			if (normalizedTarget === normalizedActual || linkTarget === actualPath) {
-				console.log(`   Симлинк уже существует и указывает на правильный путь, пропускаем`);
-				console.log("✅ Структура уже исправлена для OpenNext");
-				process.exit(0);
+	const serverPath = join(expectedPath, "server", "pages-manifest.json");
+	if (existsSync(serverPath)) {
+		// Проверяем, является ли это симлинком
+		try {
+			const stats = lstatSync(expectedPath);
+			if (stats.isSymbolicLink()) {
+				// Проверяем, куда ведет симлинк
+				const linkTarget = readlinkSync(expectedPath);
+				const resolvedTarget = join(dirname(expectedPath), linkTarget);
+				// Нормализуем пути для сравнения
+				const normalizedActual = join(actualPath);
+				const normalizedTarget = join(resolvedTarget);
+				if (normalizedTarget === normalizedActual || linkTarget === actualPath) {
+					console.log(`   Симлинк уже существует и указывает на правильный путь, пропускаем`);
+					console.log("✅ Структура уже исправлена для OpenNext");
+					process.exit(0);
+				}
+			} else {
+				// Это директория (уже скопирована), проверяем, что она правильная
+				// Если actualPath указывает на expectedPath, значит это уже скопированная версия
+				if (actualPath === expectedPath) {
+					console.log(`   Структура уже исправлена (файлы уже скопированы), пропускаем`);
+					console.log("✅ Структура уже исправлена для OpenNext");
+					process.exit(0);
+				}
 			}
+		} catch (error) {
+			// Если не можем проверить, продолжаем
 		}
-		// Если это не симлинк или указывает не туда, удаляем
-		console.log(`   Удаление существующего пути: ${expectedPath}`);
-		rmSync(expectedPath, { recursive: true, force: true });
-	} catch (error) {
-		// Если не можем проверить, просто удаляем
-		console.log(`   Удаление существующего пути: ${expectedPath}`);
-		rmSync(expectedPath, { recursive: true, force: true });
 	}
+	// Если это не правильный путь, удаляем
+	console.log(`   Удаление существующего пути: ${expectedPath}`);
+	rmSync(expectedPath, { recursive: true, force: true });
 }
 
 // В CI/CD окружении лучше копировать, чтобы избежать проблем с симлинками
