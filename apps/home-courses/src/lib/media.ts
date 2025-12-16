@@ -1,16 +1,12 @@
+import { MEDIA_PATH_PREFIX } from "./constants";
+
 export function mediaUrl(r2Key: string) {
-    const base = process.env.NEXT_PUBLIC_MEDIA_BASE_URL!;
-    return `${base.replace(/\/$/, "")}/media/${r2Key}`;
+    return `${MEDIA_PATH_PREFIX}/${r2Key}`;
 }
 
 export function processMediaUrlsInHtml(html: string): string {
-    // Заменяем /media/ пути в атрибутах src и href
-    return html.replace(
-        /(src|href)=["'](\/media\/[^"']+)["']/g,
-        (match, attr, path) => {
-            const r2Key = path.replace(/^\/media\//, "");
-            return `${attr}="${mediaUrl(r2Key)}"`;
-        }
-    );
+    // Относительные пути уже правильные, просто возвращаем HTML как есть
+    // (или можно оставить для обратной совместимости, если нужно)
+    return html;
 }
   

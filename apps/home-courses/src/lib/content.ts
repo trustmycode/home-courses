@@ -1,4 +1,10 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import {
+	R2_INDEX_KEY,
+	CACHE_NAME_INDEX,
+	CACHE_KEY_INDEX,
+	CACHE_MAX_AGE_INDEX,
+} from "./constants";
 
 export type LessonMeta = {
   slug: string;
@@ -35,8 +41,8 @@ export type LessonAssets = {
 
 export async function loadIndex(): Promise<CoursesIndex> {
   // Используем Cache API для кэширования индекса
-  const cacheKey = new Request("https://internal/courses/index.json");
-  const cache = await caches.open("courses-index");
+  const cacheKey = new Request(CACHE_KEY_INDEX);
+  const cache = await caches.open(CACHE_NAME_INDEX);
   const cached = await cache.match(cacheKey);
 
   if (cached) {
@@ -45,20 +51,20 @@ export async function loadIndex(): Promise<CoursesIndex> {
   }
 
   const { env } = await getCloudflareContext({ async: true });
-  const obj = await env.COURSE_MEDIA.get("courses/index.json");
+  const obj = await env.COURSE_MEDIA.get(R2_INDEX_KEY);
 
   if (!obj) {
-    throw new Error("courses/index.json not found in R2");
+    throw new Error(`${R2_INDEX_KEY} not found in R2`);
   }
 
   const text = await obj.text();
   const index = JSON.parse(text) as CoursesIndex;
 
-  // Кэшируем на 5 минут
+  // Кэшируем на указанное время
   const response = new Response(JSON.stringify(index), {
     headers: {
       "Content-Type": "application/json",
-      "Cache-Control": "public, max-age=300",
+      "Cache-Control": `public, max-age=${CACHE_MAX_AGE_INDEX}`,
     },
   });
   await cache.put(cacheKey, response.clone());
