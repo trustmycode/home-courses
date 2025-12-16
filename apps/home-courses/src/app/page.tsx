@@ -2,7 +2,7 @@ import { loadCourses } from "@/lib/content";
 import { Header } from "@/components/layout/Header";
 import { CourseCard } from "@/components/course/CourseCard";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 export default async function Page() {
   const courses = await loadCourses();
@@ -10,7 +10,7 @@ export default async function Page() {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      
+
       <main className="container mx-auto px-4 py-8 lg:py-12 max-w-6xl">
         {/* Page header */}
         <div className="mb-8">
@@ -32,7 +32,7 @@ export default async function Page() {
           </div>
         ) : (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {courses.map(course => (
+            {courses.map((course) => (
               <CourseCard key={course.slug} course={course} />
             ))}
           </div>

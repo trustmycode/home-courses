@@ -153,8 +153,8 @@ export default async function LessonPage({
                 )}
               </div>
               <h1 className="text-2xl lg:text-3xl font-bold text-foreground">
-                {lesson.title}
-              </h1>
+        {lesson.title}
+      </h1>
             </div>
 
             {/* Media Player */}

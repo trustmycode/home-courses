@@ -5,7 +5,7 @@ All colors MUST be HSL.
 */
 
 @layer base {
-  :root {
+:root {
     --background: 240 4% 95%;
     --foreground: 240 5% 10%;
 
@@ -174,9 +174,9 @@ All colors MUST be HSL.
 @layer base {
   * {
     border-color: hsl(var(--border));
-  }
+}
 
-  body {
+body {
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
     font-family: var(--font-sans);

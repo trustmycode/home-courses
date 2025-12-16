@@ -47,8 +47,8 @@ export default async function CoursePage({
         {/* Course header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-foreground mb-2">
-            {course.title}
-          </h1>
+        {course.title}
+      </h1>
           {course.description && (
             <p className="text-muted-foreground">{course.description}</p>
           )}
@@ -68,7 +68,7 @@ export default async function CoursePage({
             ))}
           </div>
         </div>
-      </main>
+    </main>
     </div>
   );
 }
