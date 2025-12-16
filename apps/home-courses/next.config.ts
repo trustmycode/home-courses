@@ -2,14 +2,19 @@ import type { NextConfig } from "next";
 import path from "path";
 
 const nextConfig: NextConfig = {
+	// Требуется для OpenNext Cloudflare
+	output: "standalone",
+	
 	// Указываем корень для file tracing в монорепо
-	// Это ускоряет сборку и устраняет предупреждение о множественных lockfiles
+	// ВАЖНО: может создавать глубокую структуру папок в standalone
+	// Если OpenNext не находит файлы, попробуйте убрать эту строку
 	outputFileTracingRoot: path.join(__dirname, "../../../"),
+	
+	// Пакеты, которые должны быть внешними (не включаются в бандл)
+	serverExternalPackages: ["@opennextjs/cloudflare"],
 	
 	// Оптимизация для Cloudflare
 	experimental: {
-		// Отключаем функции, которые не нужны на Cloudflare
-		serverComponentsExternalPackages: ["@opennextjs/cloudflare"],
 		// Оптимизация для уменьшения размера бандла
 		optimizePackageImports: [
 			"lucide-react",
