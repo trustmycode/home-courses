@@ -11,7 +11,7 @@
  * Решение: создаем симлинк или копируем структуру в ожидаемое место
  */
 
-import { existsSync, mkdirSync, symlinkSync, cpSync, rmSync, readdirSync, statSync } from "fs";
+import { existsSync, mkdirSync, symlinkSync, cpSync, rmSync, readdirSync, statSync, lstatSync, readlinkSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 
@@ -83,26 +83,58 @@ if (!existsSync(dirname(expectedPath))) {
 	mkdirSync(dirname(expectedPath), { recursive: true });
 }
 
-// Если ожидаемый путь уже существует, удаляем его
+// Если ожидаемый путь уже существует, проверяем, не является ли он симлинком на тот же путь
 if (existsSync(expectedPath)) {
-	console.log(`   Удаление существующего пути: ${expectedPath}`);
-	rmSync(expectedPath, { recursive: true, force: true });
+	try {
+		const stats = lstatSync(expectedPath);
+		if (stats.isSymbolicLink()) {
+			// Проверяем, куда ведет симлинк
+			const linkTarget = readlinkSync(expectedPath);
+			const resolvedTarget = join(dirname(expectedPath), linkTarget);
+			// Нормализуем пути для сравнения
+			const normalizedActual = join(actualPath);
+			const normalizedTarget = join(resolvedTarget);
+			if (normalizedTarget === normalizedActual || linkTarget === actualPath) {
+				console.log(`   Симлинк уже существует и указывает на правильный путь, пропускаем`);
+				console.log("✅ Структура уже исправлена для OpenNext");
+				process.exit(0);
+			}
+		}
+		// Если это не симлинк или указывает не туда, удаляем
+		console.log(`   Удаление существующего пути: ${expectedPath}`);
+		rmSync(expectedPath, { recursive: true, force: true });
+	} catch (error) {
+		// Если не можем проверить, просто удаляем
+		console.log(`   Удаление существующего пути: ${expectedPath}`);
+		rmSync(expectedPath, { recursive: true, force: true });
+	}
 }
 
-// Создаем симлинк (предпочтительно) или копируем
-try {
-	console.log(`   Создание симлинка...`);
-	symlinkSync(actualPath, expectedPath, "dir");
-	console.log("✓ Симлинк создан успешно");
-} catch (error) {
-	if (error.code === "EPERM" || error.code === "ENOSYS") {
-		// Если симлинки не поддерживаются (Windows без прав администратора), копируем
-		console.log(`   Симлинк не поддерживается, копируем файлы...`);
-		cpSync(actualPath, expectedPath, { recursive: true });
-		console.log("✓ Файлы скопированы успешно");
-	} else {
-		console.error(`❌ Ошибка при создании симлинка: ${error.message}`);
-		process.exit(1);
+// В CI/CD окружении лучше копировать, чтобы избежать проблем с симлинками
+// Используем копирование вместо симлинка для надежности
+// Также проверяем переменные окружения Cloudflare Pages
+const useCopy = process.env.CI === "true" || process.env.CF_PAGES === "1" || process.env.CF_PAGES_BRANCH !== undefined;
+
+if (useCopy) {
+	console.log(`   Копирование файлов (CI/CD режим)...`);
+	cpSync(actualPath, expectedPath, { recursive: true });
+	console.log("✓ Файлы скопированы успешно");
+} else {
+	// Локально используем симлинк
+	try {
+		console.log(`   Создание симлинка...`);
+		symlinkSync(actualPath, expectedPath, "dir");
+		console.log("✓ Симлинк создан успешно");
+	} catch (error) {
+		if (error.code === "EPERM" || error.code === "ENOSYS" || error.code === "ELOOP") {
+			// Если симлинки не поддерживаются или есть циклическая ссылка, копируем
+			console.log(`   Симлинк не поддерживается, копируем файлы...`);
+			cpSync(actualPath, expectedPath, { recursive: true });
+			console.log("✓ Файлы скопированы успешно");
+		} else {
+			console.error(`❌ Ошибка при создании симлинка: ${error.message}`);
+			process.exit(1);
+		}
 	}
 }
 
