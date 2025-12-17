@@ -90,9 +90,21 @@ async function verify(key: string, exp: number, sig: string, secret: string): Pr
 export default {
 	async fetch(req: Request, env: Env): Promise<Response> {
 		const url = new URL(req.url);
-		const key = parseKey(url);
+		let key = parseKey(url);
 
 		if (!key) return new Response('Bad Request', { status: 400 });
+		
+		// Нормализуем ключ: убираем лишние слэши (parseKey уже убирает начальные)
+		key = key.replace(/\/+$/, "");
+		
+		// Логируем для отладки
+		console.log('Media request', { 
+			pathname: url.pathname, 
+			key, 
+			hasSecret: !!env.MEDIA_SIGNING_SECRET,
+			hasExp: !!url.searchParams.get("exp"),
+			hasSig: !!url.searchParams.get("sig")
+		});
 
 		// Проверка подписи (если секрет настроен)
 		if (env.MEDIA_SIGNING_SECRET) {

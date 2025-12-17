@@ -54,7 +54,7 @@ export async function GET(req: Request) {
 
 	// Получаем параметр key из query string
 	const url = new URL(req.url);
-	const key = url.searchParams.get("key");
+	let key = url.searchParams.get("key");
 	
 	if (!key) {
 		return NextResponse.json(
@@ -62,6 +62,9 @@ export async function GET(req: Request) {
 			{ status: 400 }
 		);
 	}
+
+	// Нормализуем ключ: убираем пробелы и лишние слэши
+	key = key.trim().replace(/^\/+/, "").replace(/\/+$/, "");
 
 	// Валидация ключа: запрещаем path traversal
 	if (key.includes("..") || key.startsWith("/")) {
@@ -74,14 +77,25 @@ export async function GET(req: Request) {
 	// Генерируем время истечения (1 час = 3600 секунд)
 	const exp = Math.floor(Date.now() / 1000) + 3600;
 	
-	// Генерируем подпись
+	// Генерируем подпись для оригинального ключа (без кодирования)
 	const sig = await sign(key, exp, secret);
 
 	// Получаем базовый URL для медиа из переменной окружения
 	const mediaBaseUrl = process.env.NEXT_PUBLIC_MEDIA_BASE_URL || "https://home-courses-media.ourhomecources.workers.dev";
 	
 	// Формируем подписанный URL
+	// Важно: кодируем ключ только для URL, но подпись генерируем для оригинального ключа
 	const signedUrl = `${mediaBaseUrl}/media/${encodeURIComponent(key)}?exp=${exp}&sig=${sig}`;
+	
+	// Логируем для отладки (только в development)
+	if (process.env.NODE_ENV === "development") {
+		console.log("Generated signed URL", { 
+			key, 
+			encodedKey: encodeURIComponent(key),
+			exp,
+			sigPreview: sig.substring(0, 10) + "..."
+		});
+	}
 	
 	return NextResponse.json({ url: signedUrl });
 }
