@@ -108,14 +108,29 @@ export default {
 			
 			// Проверяем, не истекла ли подпись
 			if (!Number.isFinite(exp) || now > exp) {
+				console.error('Link expired', { exp, now, diff: now - exp });
 				return new Response('Link expired', { status: 403 });
 			}
 			
-			// Проверяем подпись
+			// parseKey уже возвращает декодированный ключ из pathname
+			// Проверяем подпись для этого ключа
 			const isValid = await verify(key, exp, sigParam, env.MEDIA_SIGNING_SECRET);
 			if (!isValid) {
+				// Логируем для отладки
+				console.error('Signature verification failed', { 
+					key, 
+					exp, 
+					now,
+					expired: now > exp,
+					hasSecret: !!env.MEDIA_SIGNING_SECRET,
+					sigLength: sigParam.length,
+					sigPreview: sigParam.substring(0, 10) + '...'
+				});
 				return new Response('Invalid signature', { status: 403 });
 			}
+		} else {
+			// Если секрет не настроен, разрешаем доступ (для разработки)
+			console.warn('MEDIA_SIGNING_SECRET is not configured, allowing access without signature verification');
 		}
 
 		let pr: ParsedRange | null = null;
@@ -126,7 +141,7 @@ export default {
 			return new Response('Range Not Satisfiable', { status: 416 });
 		}
 
-		// Берём объект (с range или без)
+		// parseKey уже возвращает декодированный ключ, используем его напрямую для R2
 		const obj = await env.COURSE_MEDIA.get(key, pr ? { range: pr } : {});
 
 		if (!obj) return new Response('Not Found', { status: 404 });
