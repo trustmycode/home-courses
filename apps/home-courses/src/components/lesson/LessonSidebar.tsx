@@ -19,6 +19,7 @@ export function LessonSidebar({ course, currentLessonSlug, courseSlug }: LessonS
       <div className="p-4 border-b border-sidebar-border">
         <Link 
           href={`/course/${courseSlug}`}
+          prefetch={false}
           className="font-semibold text-sidebar-foreground text-sm mb-2 block hover:text-primary transition-colors"
         >
           {course.title}
@@ -60,6 +61,7 @@ function LessonSidebarItem({ lesson, lessonNumber, isActive, courseSlug }: Lesso
   return (
     <Link
       href={`/course/${courseSlug}/lesson/${lesson.slug}`}
+      prefetch={false}
       className={cn(
         "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors mb-1",
         isActive 

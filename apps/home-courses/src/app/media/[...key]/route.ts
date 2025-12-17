@@ -35,6 +35,16 @@ export async function GET(
 	req: Request,
 	{ params }: { params: Promise<{ key: string[] }> }
 ) {
+	// В продакшене медиа больше не проксируется через home-courses
+	// Используйте подписанные URL напрямую через home-courses-media
+	if (process.env.NODE_ENV !== "development") {
+		return new Response(
+			"Media is no longer served through this endpoint. Please use signed URLs from /api/media-url",
+			{ status: 410 }
+		);
+	}
+
+	// В development оставляем для обратной совместимости
 	const { env } = await getCloudflareContext({ async: true });
 
 	const { key: keyArray } = await params;
@@ -79,6 +89,16 @@ export async function HEAD(
 	req: Request,
 	{ params }: { params: Promise<{ key: string[] }> }
 ) {
+	// В продакшене медиа больше не проксируется через home-courses
+	// Используйте подписанные URL напрямую через home-courses-media
+	if (process.env.NODE_ENV !== "development") {
+		return new Response(
+			"Media is no longer served through this endpoint. Please use signed URLs from /api/media-url",
+			{ status: 410 }
+		);
+	}
+
+	// В development оставляем для обратной совместимости
 	const { env } = await getCloudflareContext({ async: true });
 
 	const { key: keyArray } = await params;

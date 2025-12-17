@@ -1,5 +1,6 @@
 export interface Env {
 	COURSE_MEDIA: R2Bucket;
+	MEDIA_SIGNING_SECRET: string;
 }
 
 type ParsedRange = { offset: number; length?: number } | { suffix: number };
@@ -55,12 +56,67 @@ function computeStartEnd(total: number, pr: ParsedRange): { start: number; end: 
 	return { start, end };
 }
 
+/**
+ * Проверяет HMAC-SHA256 подпись для медиа-файла
+ * @param key - R2 ключ медиа-файла
+ * @param exp - Unix timestamp истечения подписи
+ * @param sig - Base64url-encoded подпись
+ * @param secret - Секретный ключ для проверки
+ * @returns true если подпись валидна, false иначе
+ */
+async function verify(key: string, exp: number, sig: string, secret: string): Promise<boolean> {
+	const data = `${key}:${exp}`;
+	const encoder = new TextEncoder();
+	const keyBytes = encoder.encode(secret);
+	const dataBytes = encoder.encode(data);
+	
+	// Декодируем base64url подпись
+	const sigBytes = Uint8Array.from(
+		atob(sig.replace(/-/g, "+").replace(/_/g, "/")),
+		c => c.charCodeAt(0)
+	);
+	
+	const cryptoKey = await crypto.subtle.importKey(
+		"raw",
+		keyBytes,
+		{ name: "HMAC", hash: "SHA-256" },
+		false,
+		["verify"]
+	);
+	
+	return crypto.subtle.verify("HMAC", cryptoKey, sigBytes, dataBytes);
+}
+
 export default {
 	async fetch(req: Request, env: Env): Promise<Response> {
 		const url = new URL(req.url);
 		const key = parseKey(url);
 
 		if (!key) return new Response('Bad Request', { status: 400 });
+
+		// Проверка подписи (если секрет настроен)
+		if (env.MEDIA_SIGNING_SECRET) {
+			const expParam = url.searchParams.get("exp");
+			const sigParam = url.searchParams.get("sig");
+			
+			if (!expParam || !sigParam) {
+				return new Response('Missing signature parameters', { status: 403 });
+			}
+			
+			const exp = parseInt(expParam, 10);
+			const now = Math.floor(Date.now() / 1000);
+			
+			// Проверяем, не истекла ли подпись
+			if (!Number.isFinite(exp) || now > exp) {
+				return new Response('Link expired', { status: 403 });
+			}
+			
+			// Проверяем подпись
+			const isValid = await verify(key, exp, sigParam, env.MEDIA_SIGNING_SECRET);
+			if (!isValid) {
+				return new Response('Invalid signature', { status: 403 });
+			}
+		}
 
 		let pr: ParsedRange | null = null;
 		try {

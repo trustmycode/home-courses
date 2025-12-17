@@ -40,7 +40,7 @@ export function LessonCard({ lesson, courseSlug, lessonNumber }: LessonCardProps
               size="sm"
               className="h-8"
             >
-              <Link href={`/course/${courseSlug}/lesson/${lesson.slug}`}>
+              <Link href={`/course/${courseSlug}/lesson/${lesson.slug}`} prefetch={false}>
                 <Play className="h-3 w-3 mr-1.5" />
                 Start
               </Link>

@@ -13,6 +13,7 @@ declare namespace Cloudflare {
 interface CloudflareEnv extends Cloudflare.Env {
 	COURSE_DB: D1Database;
 	COURSE_MEDIA: R2Bucket;
+	MEDIA_SIGNING_SECRET: string;
 }
 type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;

@@ -40,14 +40,14 @@ export function CourseCard({ course }: CourseCardProps) {
         <div className="flex gap-2">
           {firstLessonSlug && (
             <Button asChild className="flex-1">
-              <Link href={`/course/${course.slug}/lesson/${firstLessonSlug}`}>
+              <Link href={`/course/${course.slug}/lesson/${firstLessonSlug}`} prefetch={false}>
                 <Play className="h-4 w-4 mr-2" />
                 Start
               </Link>
             </Button>
           )}
           <Button asChild variant="outline">
-            <Link href={`/course/${course.slug}`}>
+            <Link href={`/course/${course.slug}`} prefetch={false}>
               View lessons
             </Link>
           </Button>
