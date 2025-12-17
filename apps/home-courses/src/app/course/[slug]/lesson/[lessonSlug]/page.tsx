@@ -166,7 +166,11 @@ export default async function LessonPage({
             {/* Content */}
             {html && (
               <div className="mb-8">
-                <LessonContent html={html} />
+                <LessonContent 
+                  html={html} 
+                  videoAsset={videoAsset}
+                  audioAsset={audioAsset}
+                />
               </div>
             )}
 
