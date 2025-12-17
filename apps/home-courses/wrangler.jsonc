@@ -40,20 +40,37 @@
     {
       "binding": "COURSE_DB",
       "database_name": "course-db",
-      "database_id": "2cf93440-3133-45f8-8329-3e88fb9de80b",
-      "remote": true
+      "database_id": "2cf93440-3133-45f8-8329-3e88fb9de80b"
     }
   ],
   "r2_buckets": [
     {
       "bucket_name": "course-media",
-      "binding": "COURSE_MEDIA",
-      "remote": true
+      "binding": "COURSE_MEDIA"
     }
   ],
+  "env": {
+    "dev": {
+      "d1_databases": [
+        {
+          "binding": "COURSE_DB",
+          "database_name": "course-db",
+          "database_id": "2cf93440-3133-45f8-8329-3e88fb9de80b",
+          "remote": true
+        }
+      ],
+      "r2_buckets": [
+        {
+          "bucket_name": "course-media",
+          "binding": "COURSE_MEDIA",
+          "remote": true
+        }
+      ]
+    }
+  },
   "vars": {
     "NEXT_PUBLIC_MEDIA_BASE_URL": "https://home-courses-media.ourhomecources.workers.dev"
-  }
+  },
   /**
    * Smart Placement
    * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement

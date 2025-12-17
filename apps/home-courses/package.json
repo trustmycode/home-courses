@@ -9,8 +9,8 @@
 		"start": "next start",
 		"lint": "next lint",
 		"build:opennext": "pnpm run build && node scripts/fix-standalone-path.mjs && opennextjs-cloudflare build --skipNextBuild",
-		"deploy": "pnpm run build:opennext && wrangler deploy",
-		"deploy:ci": "pnpm run build:opennext && bash scripts/ensure-cloudflared.sh && PATH=\"/tmp:/usr/local/bin:/usr/bin:$HOME/.local/bin:$PATH\" wrangler deploy",
+		"deploy": "pnpm run build:opennext && WRANGLER_REMOTE_PROTOCOL=direct wrangler deploy",
+		"deploy:ci": "pnpm run build:opennext && wrangler deploy",
 		"upload": "pnpm run build:opennext && wrangler deploy --dry-run",
 		"preview": "pnpm run build:opennext && opennextjs-cloudflare preview",
 		"cf-typegen": "wrangler types --env-interface CloudflareEnv ./cloudflare-env.d.ts"
