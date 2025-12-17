@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Montserrat, Cormorant_Garamond, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/hooks/use-theme";
+import { Toaster } from "@/components/ui/sonner";
 
 const montserrat = Montserrat({
 	subsets: ["latin", "cyrillic"],
@@ -50,6 +51,7 @@ export default function RootLayout({
 			<body className={`${montserrat.variable} ${cormorant.variable} ${ibmPlexMono.variable} antialiased`}>
 				<ThemeProvider>
 					{children}
+					<Toaster />
 				</ThemeProvider>
 			</body>
 		</html>

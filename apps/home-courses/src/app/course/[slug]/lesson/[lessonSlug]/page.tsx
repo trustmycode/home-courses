@@ -2,7 +2,6 @@ import { ChevronLeft, List } from "lucide-react";
 import Link from "next/link";
 import { loadLesson, loadCourse, loadLessonAssets } from "@/lib/content";
 import { loadHtml } from "@/lib/markdown";
-import { processMediaUrlsInHtml } from "@/lib/media";
 import { Header } from "@/components/layout/Header";
 import { Breadcrumbs } from "@/components/layout/Breadcrumbs";
 import { LessonSidebar } from "@/components/lesson/LessonSidebar";
@@ -20,9 +19,7 @@ export default async function LessonPage({
 }: {
   params: Promise<{ slug: string; lessonSlug: string }>;
 }) {
-  const { slug, lessonSlug: rawLessonSlug } = await params;
-  // Нормализуем lessonSlug: убираем префикс "lesson/" если он есть
-  const lessonSlug = rawLessonSlug.replace(/^lesson\//, "");
+  const { slug, lessonSlug } = await params;
   const course = await loadCourse(slug);
   const lesson = await loadLesson(slug, lessonSlug);
 
@@ -37,8 +34,7 @@ export default async function LessonPage({
     );
   }
 
-  const rawHtml = await loadHtml(lesson.contentHtmlKey);
-  const html = processMediaUrlsInHtml(rawHtml);
+  const html = await loadHtml(lesson.contentHtmlKey);
 
   // Загружаем assets для медиа
   let videoAsset, audioAsset;

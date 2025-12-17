@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 
-import { getUserEmail } from "@/lib/access";
+import { requireUserEmail } from "@/lib/access";
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 export async function GET(req: Request) {
   const { env } = getCloudflareContext();
-  const email = await getUserEmail();
+  const emailOrResponse = await requireUserEmail();
+  if (emailOrResponse instanceof NextResponse) return emailOrResponse;
+  const email = emailOrResponse;
 
   const url = new URL(req.url);
   const courseSlug = url.searchParams.get("courseSlug");
@@ -24,7 +26,26 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   const { env } = getCloudflareContext();
-  const email = await getUserEmail();
+  const emailOrResponse = await requireUserEmail();
+  if (emailOrResponse instanceof NextResponse) return emailOrResponse;
+  const email = emailOrResponse;
+
+  // CSRF защита: проверяем Origin header
+  const origin = req.headers.get("origin");
+  const requestUrl = new URL(req.url);
+  const expectedOrigin = requestUrl.origin;
+
+  // В dev окружении разрешаем localhost origins
+  const allowedOrigins = process.env.NODE_ENV === "development"
+    ? [expectedOrigin, "http://localhost:3000", "http://127.0.0.1:3000"]
+    : [expectedOrigin];
+
+  if (!origin || !allowedOrigins.includes(origin)) {
+    return NextResponse.json(
+      { error: "Forbidden: invalid origin" },
+      { status: 403 }
+    );
+  }
 
   const body = (await req.json()) as {
     courseSlug?: string;

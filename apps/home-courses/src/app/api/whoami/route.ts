@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 
-import { getUserEmail } from "@/lib/access";
+import { requireUserEmail } from "@/lib/access";
 
 export async function GET() {
-  return NextResponse.json({ email: await getUserEmail() });
+  const emailOrResponse = await requireUserEmail();
+  if (emailOrResponse instanceof NextResponse) return emailOrResponse;
+  const email = emailOrResponse;
+  
+  return NextResponse.json({ email });
 }
 
