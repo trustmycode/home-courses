@@ -6,7 +6,15 @@ export interface Env {
 type ParsedRange = { offset: number; length?: number } | { suffix: number };
 
 function parseKey(url: URL) {
-	const p = url.pathname.replace(/^\/+/, '');
+	// Декодируем pathname (он может содержать URL-encoded символы, например %2F для /)
+	let decodedPathname: string;
+	try {
+		decodedPathname = decodeURIComponent(url.pathname);
+	} catch {
+		// Если декодирование не удалось, используем оригинальный pathname
+		decodedPathname = url.pathname;
+	}
+	const p = decodedPathname.replace(/^\/+/, '');
 	return p.startsWith('media/') ? p.slice('media/'.length) : p;
 }
 
