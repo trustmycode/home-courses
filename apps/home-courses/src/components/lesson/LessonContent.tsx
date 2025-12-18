@@ -1,168 +1,454 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { AssetMeta } from "@/lib/content";
+import { useEffect, useRef, useCallback, useState } from "react";
+
+type LessonProgressResponse = {
+	courseSlug: string;
+	lessonSlug: string;
+	isCompleted: boolean;
+	timeSpentSec: number;
+	updatedAtMs: number;
+	mediaPositions: Array<{
+		assetId: string;
+		assetType: "video" | "audio";
+		positionSec: number;
+		updatedAtMs: number;
+	}>;
+};
 
 interface LessonContentProps {
-  html: string;
-  videoAsset?: AssetMeta;
-  audioAsset?: AssetMeta;
+	html: string;
+	courseSlug: string;
+	lessonSlug: string;
+	initialProgress?: LessonProgressResponse | null;
 }
+
+type AssetsById = Record<string, { url: string; kind: string }>;
 
 /**
- * Извлекает r2Key из URL формата /media/{r2Key}
+ * Хук для трекинга прогресса медиа
  */
-function extractR2Key(src: string): string | null {
-  const match = src.match(/^\/media\/(.+)$/);
-  return match ? match[1] : null;
+function useMediaProgress(
+	courseSlug: string,
+	lessonSlug: string,
+	initialProgress?: LessonProgressResponse | null
+) {
+	const pendingPositions = useRef<Map<string, number>>(new Map());
+	const timeSpentDelta = useRef<number>(0);
+	const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const isTrackingTime = useRef<boolean>(false);
+	const timeTrackingStart = useRef<number>(0);
+	const [isCompleted, setIsCompleted] = useState(
+		initialProgress?.isCompleted ?? false
+	);
+
+	const flushProgress = useCallback(async () => {
+		if (pendingPositions.current.size === 0 && timeSpentDelta.current === 0) {
+			return;
+		}
+
+		const positions: Array<{
+			assetId: string;
+			assetType: "video" | "audio";
+			positionSec: number;
+			clientUpdatedAtMs: number;
+		}> = [];
+
+		for (const [assetId, positionSec] of pendingPositions.current.entries()) {
+			// Определяем тип по элементу в DOM
+			const element = document.querySelector(
+				`[data-asset-id="${assetId}"]`
+			) as HTMLVideoElement | HTMLAudioElement | null;
+			if (element) {
+				const assetType =
+					element.tagName.toLowerCase() === "video" ? "video" : "audio";
+				positions.push({
+					assetId,
+					assetType,
+					positionSec: Math.floor(positionSec),
+					clientUpdatedAtMs: Date.now(),
+				});
+			}
+		}
+
+		const timeDelta = Math.floor(timeSpentDelta.current);
+		timeSpentDelta.current = 0;
+		pendingPositions.current.clear();
+
+		try {
+			const payload = {
+				courseSlug,
+				lessonSlug,
+				timeSpentSecDelta: timeDelta,
+				mediaPositions: positions,
+				isCompleted,
+			};
+
+			// Используем fetch с keepalive для надежности при закрытии страницы
+			// sendBeacon не всегда корректно обрабатывает JSON на сервере
+			await fetch("/api/progress/lesson", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(payload),
+				keepalive: true,
+			});
+		} catch (error) {
+			console.error("Failed to save progress:", error);
+		}
+	}, [courseSlug, lessonSlug, isCompleted]);
+
+	// Таймер flush каждые 20 секунд
+	useEffect(() => {
+		flushTimer.current = setInterval(() => {
+			if (pendingPositions.current.size > 0 || timeSpentDelta.current > 0) {
+				flushProgress();
+			}
+		}, 20000); // 20 секунд
+
+		return () => {
+			if (flushTimer.current) {
+				clearInterval(flushTimer.current);
+				flushTimer.current = null;
+			}
+		};
+	}, [flushProgress]);
+
+	// Слушатели для flush на выход
+	useEffect(() => {
+		const handleVisibilityChange = () => {
+			if (document.visibilityState === "hidden") {
+				flushProgress();
+			}
+		};
+
+		const handlePageHide = () => {
+			flushProgress();
+		};
+
+		window.addEventListener("visibilitychange", handleVisibilityChange);
+		window.addEventListener("pagehide", handlePageHide);
+
+		return () => {
+			window.removeEventListener("visibilitychange", handleVisibilityChange);
+			window.removeEventListener("pagehide", handlePageHide);
+		};
+	}, [flushProgress]);
+
+	// Трекинг времени просмотра (wall-clock)
+	useEffect(() => {
+		let interval: ReturnType<typeof setInterval> | null = null;
+
+		const startTracking = () => {
+			if (!isTrackingTime.current) {
+				isTrackingTime.current = true;
+				timeTrackingStart.current = Date.now();
+			}
+		};
+
+		const stopTracking = () => {
+			if (isTrackingTime.current) {
+				isTrackingTime.current = false;
+				const elapsed = (Date.now() - timeTrackingStart.current) / 1000;
+				timeSpentDelta.current += elapsed;
+				timeTrackingStart.current = 0;
+			}
+		};
+
+		// Проверяем, есть ли активные медиа
+		const checkActiveMedia = () => {
+			const container = document.querySelector('[data-lesson-content]');
+			if (!container) return;
+
+			const videos = container.querySelectorAll<HTMLVideoElement>("video");
+			const audios = container.querySelectorAll<HTMLAudioElement>("audio");
+			let hasPlaying = false;
+
+			for (const media of [...videos, ...audios]) {
+				if (!media.paused && !media.ended && media.currentTime > 0) {
+					hasPlaying = true;
+					break;
+				}
+			}
+
+			if (hasPlaying) {
+				startTracking();
+			} else {
+				stopTracking();
+			}
+		};
+
+		// Проверяем каждую секунду
+		interval = setInterval(checkActiveMedia, 1000);
+		checkActiveMedia(); // Первая проверка
+
+		return () => {
+			if (interval) {
+				clearInterval(interval);
+			}
+			stopTracking();
+		};
+	}, []);
+
+	return {
+		updatePosition: (assetId: string, positionSec: number) => {
+			pendingPositions.current.set(assetId, positionSec);
+		},
+		markCompleted: async () => {
+			setIsCompleted(true);
+			await fetch("/api/progress/lesson", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					courseSlug,
+					lessonSlug,
+					isCompleted: true,
+				}),
+			});
+		},
+		isCompleted,
+	};
 }
 
-/**
- * Заменяет src атрибуты video/audio тегов и href ссылок на подписанные URL
- * Также скрывает дубликаты видео/аудио, которые уже отображаются в MediaPlayer
- */
-async function replaceMediaUrls(container: HTMLElement, videoAsset?: AssetMeta, audioAsset?: AssetMeta) {
-  // Собираем r2Key элементов, которые нужно скрыть
-  const hiddenR2Keys = new Set<string>();
-  if (videoAsset) hiddenR2Keys.add(videoAsset.r2Key);
-  if (audioAsset) hiddenR2Keys.add(audioAsset.r2Key);
-  
-  // Скрываем видео/аудио, которые уже отображаются в MediaPlayer
-  const allMediaElements = container.querySelectorAll<HTMLVideoElement | HTMLAudioElement>("video, audio");
-  const visibleMediaElements: (HTMLVideoElement | HTMLAudioElement)[] = [];
-  
-  allMediaElements.forEach((element) => {
-    const src = element.getAttribute("src");
-    if (src) {
-      const r2Key = extractR2Key(src);
-      if (r2Key && hiddenR2Keys.has(r2Key)) {
-        // Скрываем это видео/аудио, так как оно уже в MediaPlayer
-        const figure = element.closest("figure");
-        if (figure) {
-          figure.style.display = "none";
-        } else {
-          element.style.display = "none";
-        }
-        return; // Не добавляем в список для обработки
-      }
-    }
-    visibleMediaElements.push(element);
-  });
-  
-  // Обрабатываем только видимые video и audio элементы
-  const mediaPromises = visibleMediaElements.map(async (element) => {
-    const src = element.getAttribute("src");
-    if (!src) return;
-    
-    const r2Key = extractR2Key(src);
-    if (!r2Key) return; // Пропускаем, если это не наш формат
-    
-    try {
-      const response = await fetch(`/api/media-url?key=${encodeURIComponent(r2Key)}`);
-      if (!response.ok) {
-        console.error(`Failed to get signed URL for ${r2Key}:`, response.statusText);
-        return;
-      }
-      
-      const data = (await response.json()) as { url: string };
-      const signedUrl = data.url;
-      element.src = signedUrl;
-      
-      // Также обновляем source элементы внутри
-      const sources = element.querySelectorAll<HTMLSourceElement>("source");
-      sources.forEach((source) => {
-        const sourceSrc = source.getAttribute("src");
-        if (sourceSrc) {
-          const sourceR2Key = extractR2Key(sourceSrc);
-          if (sourceR2Key === r2Key) {
-            source.src = signedUrl;
-          }
-        }
-      });
-    } catch (error) {
-      console.error(`Error loading signed URL for ${r2Key}:`, error);
-    }
-  });
-  
-  // Обрабатываем ссылки на документы (download links)
-  const downloadLinks = container.querySelectorAll<HTMLAnchorElement>("a[href^='/media/']");
-  
-  const linkPromises = Array.from(downloadLinks).map(async (link) => {
-    const href = link.getAttribute("href");
-    if (!href) return;
-    
-    const r2Key = extractR2Key(href);
-    if (!r2Key) return; // Пропускаем, если это не наш формат
-    
-    try {
-      const response = await fetch(`/api/media-url?key=${encodeURIComponent(r2Key)}`);
-      if (!response.ok) {
-        console.error(`Failed to get signed URL for ${r2Key}:`, response.statusText);
-        return;
-      }
-      
-      const data = (await response.json()) as { url: string };
-      const signedUrl = data.url;
-      link.href = signedUrl;
-      
-      // Стилизуем ссылку как кнопку (используем те же классы, что и Button компонент)
-      // Добавляем классы только если ссылка еще не стилизована
-      if (!link.classList.contains("download-button-styled")) {
-        // Сохраняем существующие классы и добавляем стили кнопки
-        const existingClasses = link.className.split(" ").filter(c => c && c !== "download-link");
-        link.className = [
-          "download-link",
-          "download-button-styled",
-          "inline-flex",
-          "items-center",
-          "justify-center",
-          "gap-2",
-          "whitespace-nowrap",
-          "rounded-md",
-          "text-sm",
-          "font-medium",
-          "ring-offset-background",
-          "transition-colors",
-          "focus-visible:outline-none",
-          "focus-visible:ring-2",
-          "focus-visible:ring-ring",
-          "focus-visible:ring-offset-2",
-          "disabled:pointer-events-none",
-          "disabled:opacity-50",
-          "bg-primary",
-          "text-primary-foreground",
-          "hover:bg-primary/90",
-          "h-10",
-          "px-4",
-          "py-2",
-          "no-underline",
-          ...existingClasses
-        ].join(" ");
-      }
-    } catch (error) {
-      console.error(`Error loading signed URL for ${r2Key}:`, error);
-    }
-  });
-  
-  await Promise.all([...mediaPromises, ...linkPromises]);
-}
+export function LessonContent({
+	html,
+	courseSlug,
+	lessonSlug,
+	initialProgress,
+}: LessonContentProps) {
+	const containerRef = useRef<HTMLDivElement>(null);
+	const [assetsById, setAssetsById] = useState<AssetsById | null>(null);
+	const [urlsLoaded, setUrlsLoaded] = useState(false);
+	const { updatePosition, markCompleted, isCompleted } = useMediaProgress(
+		courseSlug,
+		lessonSlug,
+		initialProgress
+	);
 
-export function LessonContent({ html, videoAsset, audioAsset }: LessonContentProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
+	// Загружаем все signed URLs одним запросом
+	useEffect(() => {
+		const loadUrls = async () => {
+			try {
+				const response = await fetch(
+					`/api/media-urls?courseSlug=${encodeURIComponent(
+						courseSlug
+					)}&lessonSlug=${encodeURIComponent(lessonSlug)}`
+				);
+				if (!response.ok) {
+					console.error("Failed to load media URLs:", response.statusText);
+					return;
+				}
 
-  useEffect(() => {
-    if (!containerRef.current) return;
-    
-    // Заменяем URL после монтирования и скрываем дубликаты
-    replaceMediaUrls(containerRef.current, videoAsset, audioAsset);
-  }, [html, videoAsset, audioAsset]);
+				const data = (await response.json()) as { assetsById: AssetsById };
+				setAssetsById(data.assetsById);
+				setUrlsLoaded(true);
+			} catch (error) {
+				console.error("Error loading media URLs:", error);
+			}
+		};
 
-  return (
-    <div className="max-w-3xl mx-auto" ref={containerRef}>
-      <article 
-        className="prose prose-lg max-w-none dark:prose-invert prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-a:text-primary hover:prose-a:text-primary/80"
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
-    </div>
-  );
+		loadUrls();
+	}, [courseSlug, lessonSlug]);
+
+	// Применяем URLs и восстанавливаем позиции
+	useEffect(() => {
+		if (!containerRef.current || !urlsLoaded || !assetsById) return;
+
+		const container = containerRef.current;
+
+		// Ищем все элементы по data-asset-id
+		const videoElements = container.querySelectorAll<HTMLVideoElement>(
+			"video[data-asset-id]"
+		);
+		const audioElements = container.querySelectorAll<HTMLAudioElement>(
+			"audio[data-asset-id]"
+		);
+		const downloadLinks = container.querySelectorAll<HTMLAnchorElement>(
+			"a.download-link[data-asset-id]"
+		);
+
+		const cleanupFunctions: Array<() => void> = [];
+
+		// Применяем URLs к видео
+		videoElements.forEach((video) => {
+			const assetId = video.getAttribute("data-asset-id");
+			if (!assetId) return;
+
+			const asset = assetsById[assetId];
+			if (!asset) {
+				console.warn(`Asset not found: ${assetId}`);
+				return;
+			}
+
+			video.src = asset.url;
+
+			// Восстанавливаем позицию из initialProgress
+			if (initialProgress) {
+				const mediaPos = initialProgress.mediaPositions.find(
+					(mp) => mp.assetId === assetId
+				);
+				if (mediaPos && mediaPos.positionSec > 0) {
+					const handleLoadedMetadata = () => {
+						if (video.duration && !isNaN(video.duration)) {
+							video.currentTime = Math.min(
+								mediaPos.positionSec,
+								video.duration - 1
+							);
+						}
+					};
+					video.addEventListener("loadedmetadata", handleLoadedMetadata, {
+						once: true,
+					});
+					cleanupFunctions.push(() => {
+						video.removeEventListener("loadedmetadata", handleLoadedMetadata);
+					});
+				}
+			}
+
+			// Трекинг позиции
+			const handleTimeUpdate = () => {
+				updatePosition(assetId, video.currentTime);
+			};
+
+			video.addEventListener("timeupdate", handleTimeUpdate);
+			cleanupFunctions.push(() => {
+				video.removeEventListener("timeupdate", handleTimeUpdate);
+			});
+
+			// Completion для primary video
+			const isPrimary =
+				video.closest("figure")?.getAttribute("data-required") === "true";
+			if (isPrimary && !isCompleted) {
+				const handleTimeUpdateForCompletion = () => {
+					if (
+						video.duration &&
+						!isNaN(video.duration) &&
+						video.duration > 0
+					) {
+						const progress = video.currentTime / video.duration;
+						if (progress >= 0.95) {
+							markCompleted();
+						}
+					}
+				};
+
+				const handleEnded = () => {
+					markCompleted();
+				};
+
+				video.addEventListener("timeupdate", handleTimeUpdateForCompletion);
+				video.addEventListener("ended", handleEnded, { once: true });
+				cleanupFunctions.push(() => {
+					video.removeEventListener("timeupdate", handleTimeUpdateForCompletion);
+					video.removeEventListener("ended", handleEnded);
+				});
+			}
+		});
+
+		// Применяем URLs к аудио
+		audioElements.forEach((audio) => {
+			const assetId = audio.getAttribute("data-asset-id");
+			if (!assetId) return;
+
+			const asset = assetsById[assetId];
+			if (!asset) {
+				console.warn(`Asset not found: ${assetId}`);
+				return;
+			}
+
+			audio.src = asset.url;
+
+			// Восстанавливаем позицию из initialProgress
+			if (initialProgress) {
+				const mediaPos = initialProgress.mediaPositions.find(
+					(mp) => mp.assetId === assetId
+				);
+				if (mediaPos && mediaPos.positionSec > 0) {
+					const handleLoadedMetadata = () => {
+						if (audio.duration && !isNaN(audio.duration)) {
+							audio.currentTime = Math.min(
+								mediaPos.positionSec,
+								audio.duration - 1
+							);
+						}
+					};
+					audio.addEventListener("loadedmetadata", handleLoadedMetadata, {
+						once: true,
+					});
+					cleanupFunctions.push(() => {
+						audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
+					});
+				}
+			}
+
+			// Трекинг позиции
+			const handleTimeUpdate = () => {
+				updatePosition(assetId, audio.currentTime);
+			};
+
+			audio.addEventListener("timeupdate", handleTimeUpdate);
+			cleanupFunctions.push(() => {
+				audio.removeEventListener("timeupdate", handleTimeUpdate);
+			});
+		});
+
+		// Применяем URLs к download links
+		downloadLinks.forEach((link) => {
+			const assetId = link.getAttribute("data-asset-id");
+			if (!assetId) return;
+
+			const asset = assetsById[assetId];
+			if (!asset) {
+				console.warn(`Asset not found: ${assetId}`);
+				return;
+			}
+
+			link.href = asset.url;
+			// Убираем disabled классы
+			link.classList.remove("pointer-events-none", "opacity-50");
+			link.removeAttribute("aria-disabled");
+
+			// Стилизуем ссылку как кнопку
+			if (!link.classList.contains("download-button-styled")) {
+				link.classList.add(
+					"download-button-styled",
+					"inline-flex",
+					"items-center",
+					"justify-center",
+					"gap-2",
+					"whitespace-nowrap",
+					"rounded-md",
+					"text-sm",
+					"font-medium",
+					"ring-offset-background",
+					"transition-colors",
+					"focus-visible:outline-none",
+					"focus-visible:ring-2",
+					"focus-visible:ring-ring",
+					"focus-visible:ring-offset-2",
+					"disabled:pointer-events-none",
+					"disabled:opacity-50",
+					"bg-primary",
+					"text-primary-foreground",
+					"hover:bg-primary/90",
+					"h-10",
+					"px-4",
+					"py-2",
+					"no-underline"
+				);
+			}
+		});
+
+		return () => {
+			cleanupFunctions.forEach((cleanup) => cleanup());
+		};
+	}, [html, urlsLoaded, assetsById, initialProgress, updatePosition, markCompleted, isCompleted, courseSlug, lessonSlug]);
+
+	return (
+		<div className="max-w-3xl mx-auto" ref={containerRef} data-lesson-content>
+			<article
+				className="prose prose-lg max-w-none dark:prose-invert prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-a:text-primary hover:prose-a:text-primary/80"
+				dangerouslySetInnerHTML={{ __html: html }}
+			/>
+		</div>
+	);
 }

@@ -1,16 +1,18 @@
 import { ChevronLeft, List } from "lucide-react";
 import Link from "next/link";
-import { loadLesson, loadCourse, loadLessonAssets } from "@/lib/content";
+import { loadLesson, loadCourse } from "@/lib/content";
 import { loadHtml } from "@/lib/markdown";
 import { Header } from "@/components/layout/Header";
 import { Breadcrumbs } from "@/components/layout/Breadcrumbs";
 import { LessonSidebar } from "@/components/lesson/LessonSidebar";
-import { MediaPlayer } from "@/components/lesson/MediaPlayer";
 import { LessonContent } from "@/components/lesson/LessonContent";
 import { LessonNavigation, MobileLessonNav } from "@/components/lesson/LessonNavigation";
+import { MarkCompletedButton } from "@/components/lesson/MarkCompletedButton";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { requireUserEmail } from "@/lib/access";
 
 export const dynamic = "force-dynamic";
 
@@ -36,14 +38,73 @@ export default async function LessonPage({
 
   const html = await loadHtml(lesson.contentHtmlKey);
 
-  // Загружаем assets для медиа
-  let videoAsset, audioAsset;
+  // Загружаем прогресс урока
+  let initialProgress = null;
   try {
-    const assets = await loadLessonAssets(lesson.assetsKey);
-    videoAsset = Object.values(assets.assets).find(a => a.type === "video");
-    audioAsset = Object.values(assets.assets).find(a => a.type === "audio");
+    const emailOrResponse = await requireUserEmail();
+    if (!(emailOrResponse instanceof Response)) {
+      const email = emailOrResponse;
+      const { env } = await getCloudflareContext({ async: true });
+      
+      // Загружаем прогресс урока
+      const progressRow = await env.COURSE_DB
+        .prepare(
+          `SELECT is_completed, time_spent_sec, updated_at_ms
+           FROM progress 
+           WHERE user_email=? AND course_slug=? AND lesson_slug=?`
+        )
+        .bind(email, slug, lessonSlug)
+        .first<{
+          is_completed: number;
+          time_spent_sec: number;
+          updated_at_ms: number;
+        }>();
+
+      // Загружаем позиции медиа
+      const mediaRows = await env.COURSE_DB
+        .prepare(
+          `SELECT asset_id, asset_type, position_sec, updated_at_ms
+           FROM media_progress
+           WHERE user_email=? AND course_slug=? AND lesson_slug=?`
+        )
+        .bind(email, slug, lessonSlug)
+        .all<{
+          asset_id: string;
+          asset_type: string;
+          position_sec: number;
+          updated_at_ms: number;
+        }>();
+
+      const mediaPositions = (mediaRows.results ?? []).map((row) => ({
+        assetId: row.asset_id,
+        assetType: row.asset_type as "video" | "audio",
+        positionSec: row.position_sec,
+        updatedAtMs: row.updated_at_ms,
+      }));
+
+      if (progressRow) {
+        initialProgress = {
+          courseSlug: slug,
+          lessonSlug,
+          isCompleted: progressRow.is_completed === 1,
+          timeSpentSec: progressRow.time_spent_sec,
+          updatedAtMs: progressRow.updated_at_ms,
+          mediaPositions,
+        };
+      } else {
+        initialProgress = {
+          courseSlug: slug,
+          lessonSlug,
+          isCompleted: false,
+          timeSpentSec: 0,
+          updatedAtMs: 0,
+          mediaPositions,
+        };
+      }
+    }
   } catch (error) {
-    console.error("Failed to load lesson assets:", error);
+    console.error("Failed to load lesson progress:", error);
+    // Продолжаем без прогресса
   }
 
   // Находим предыдущий и следующий уроки
@@ -137,42 +198,32 @@ export default async function LessonPage({
                 <Badge variant="outline" className="text-xs">
                   Lesson {currentIndex + 1}
                 </Badge>
-                {videoAsset && (
-                  <Badge variant="secondary" className="text-xs">
-                    Video
-                  </Badge>
-                )}
-                {audioAsset && (
-                  <Badge variant="secondary" className="text-xs">
-                    Audio
-                  </Badge>
-                )}
               </div>
               <h1 className="text-2xl lg:text-3xl font-bold text-foreground">
         {lesson.title}
       </h1>
             </div>
 
-            {/* Media Player */}
-            {(videoAsset || audioAsset) && (
-              <div className="mb-8">
-                <MediaPlayer 
-                  videoAsset={videoAsset}
-                  audioAsset={audioAsset}
-                />
-              </div>
-            )}
-
             {/* Content */}
             {html && (
               <div className="mb-8">
                 <LessonContent 
                   html={html} 
-                  videoAsset={videoAsset}
-                  audioAsset={audioAsset}
+                  courseSlug={slug}
+                  lessonSlug={lessonSlug}
+                  initialProgress={initialProgress}
                 />
               </div>
             )}
+
+            {/* Mark Completed Button */}
+            <div className="mb-8 flex justify-center">
+              <MarkCompletedButton
+                courseSlug={slug}
+                lessonSlug={lessonSlug}
+                initialCompleted={initialProgress?.isCompleted ?? false}
+              />
+            </div>
 
             {/* Navigation */}
             <div className="hidden lg:block">
