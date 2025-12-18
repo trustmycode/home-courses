@@ -1,106 +1,98 @@
 "use client";
 
 import { useEffect, useRef, useCallback, useState } from "react";
+import { MediaErrorToast } from "./MediaErrorToast";
 
 type LessonProgressResponse = {
-	courseSlug: string;
-	lessonSlug: string;
-	isCompleted: boolean;
-	timeSpentSec: number;
-	updatedAtMs: number;
-	mediaPositions: Array<{
-		assetId: string;
-		assetType: "video" | "audio";
-		positionSec: number;
-		updatedAtMs: number;
-	}>;
+	lessonId: string;
+	assets: Record<
+		string,
+		{
+			positionSeconds: number;
+			durationSeconds: number | null;
+			completed: boolean;
+			updatedAt: string;
+		}
+	>;
 };
 
 interface LessonContentProps {
 	html: string;
-	courseSlug: string;
-	lessonSlug: string;
+	lessonId: string;
 	initialProgress?: LessonProgressResponse | null;
 }
-
-type AssetsById = Record<string, { url: string; kind: string }>;
 
 /**
  * Хук для трекинга прогресса медиа
  */
 function useMediaProgress(
-	courseSlug: string,
-	lessonSlug: string,
+	lessonId: string,
 	initialProgress?: LessonProgressResponse | null
 ) {
 	const pendingPositions = useRef<Map<string, number>>(new Map());
-	const timeSpentDelta = useRef<number>(0);
+	const pendingDurations = useRef<Map<string, number>>(new Map());
 	const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const isTrackingTime = useRef<boolean>(false);
 	const timeTrackingStart = useRef<number>(0);
-	const [isCompleted, setIsCompleted] = useState(
-		initialProgress?.isCompleted ?? false
-	);
+	const timeSpentDelta = useRef<number>(0);
 
 	const flushProgress = useCallback(async () => {
-		if (pendingPositions.current.size === 0 && timeSpentDelta.current === 0) {
+		if (pendingPositions.current.size === 0) {
 			return;
 		}
 
-		const positions: Array<{
+		const updates: Array<{
 			assetId: string;
-			assetType: "video" | "audio";
-			positionSec: number;
-			clientUpdatedAtMs: number;
+			positionSeconds: number;
+			durationSeconds: number | null;
+			completed: boolean;
 		}> = [];
 
 		for (const [assetId, positionSec] of pendingPositions.current.entries()) {
-			// Определяем тип по элементу в DOM
+			const duration = pendingDurations.current.get(assetId) ?? null;
 			const element = document.querySelector(
 				`[data-asset-id="${assetId}"]`
 			) as HTMLVideoElement | HTMLAudioElement | null;
+			
 			if (element) {
-				const assetType =
-					element.tagName.toLowerCase() === "video" ? "video" : "audio";
-				positions.push({
+				const completed = element.ended || false;
+				updates.push({
 					assetId,
-					assetType,
-					positionSec: Math.floor(positionSec),
-					clientUpdatedAtMs: Date.now(),
+					positionSeconds: Math.floor(positionSec),
+					durationSeconds: duration ? Math.floor(duration) : null,
+					completed,
 				});
 			}
 		}
 
-		const timeDelta = Math.floor(timeSpentDelta.current);
-		timeSpentDelta.current = 0;
 		pendingPositions.current.clear();
+		pendingDurations.current.clear();
 
-		try {
-			const payload = {
-				courseSlug,
-				lessonSlug,
-				timeSpentSecDelta: timeDelta,
-				mediaPositions: positions,
-				isCompleted,
-			};
-
-			// Используем fetch с keepalive для надежности при закрытии страницы
-			// sendBeacon не всегда корректно обрабатывает JSON на сервере
-			await fetch("/api/progress/lesson", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(payload),
-				keepalive: true,
-			});
-		} catch (error) {
-			console.error("Failed to save progress:", error);
+		// Отправляем обновления (можно батчить, но для простоты отправляем по одному)
+		for (const update of updates) {
+			try {
+				await fetch("/api/progress", {
+					method: "PUT",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						lessonId,
+						assetId: update.assetId,
+						positionSeconds: update.positionSeconds,
+						durationSeconds: update.durationSeconds,
+						completed: update.completed,
+					}),
+					keepalive: true,
+				});
+			} catch (error) {
+				console.error("Failed to save progress:", error);
+			}
 		}
-	}, [courseSlug, lessonSlug, isCompleted]);
+	}, [lessonId]);
 
 	// Таймер flush каждые 20 секунд
 	useEffect(() => {
 		flushTimer.current = setInterval(() => {
-			if (pendingPositions.current.size > 0 || timeSpentDelta.current > 0) {
+			if (pendingPositions.current.size > 0) {
 				flushProgress();
 			}
 		}, 20000); // 20 секунд
@@ -154,7 +146,6 @@ function useMediaProgress(
 			}
 		};
 
-		// Проверяем, есть ли активные медиа
 		const checkActiveMedia = () => {
 			const container = document.querySelector('[data-lesson-content]');
 			if (!container) return;
@@ -177,9 +168,8 @@ function useMediaProgress(
 			}
 		};
 
-		// Проверяем каждую секунду
 		interval = setInterval(checkActiveMedia, 1000);
-		checkActiveMedia(); // Первая проверка
+		checkActiveMedia();
 
 		return () => {
 			if (interval) {
@@ -193,65 +183,38 @@ function useMediaProgress(
 		updatePosition: (assetId: string, positionSec: number) => {
 			pendingPositions.current.set(assetId, positionSec);
 		},
-		markCompleted: async () => {
-			setIsCompleted(true);
-			await fetch("/api/progress/lesson", {
-				method: "POST",
+		updateDuration: (assetId: string, durationSec: number) => {
+			pendingDurations.current.set(assetId, durationSec);
+		},
+		markCompleted: async (assetId: string) => {
+			await fetch("/api/progress", {
+				method: "PUT",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					courseSlug,
-					lessonSlug,
-					isCompleted: true,
+					lessonId,
+					assetId,
+					completed: true,
 				}),
 			});
 		},
-		isCompleted,
 	};
 }
 
 export function LessonContent({
 	html,
-	courseSlug,
-	lessonSlug,
+	lessonId,
 	initialProgress,
 }: LessonContentProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
-	const [assetsById, setAssetsById] = useState<AssetsById | null>(null);
-	const [urlsLoaded, setUrlsLoaded] = useState(false);
-	const { updatePosition, markCompleted, isCompleted } = useMediaProgress(
-		courseSlug,
-		lessonSlug,
+	const [errorAssetId, setErrorAssetId] = useState<string | null>(null);
+	const { updatePosition, updateDuration, markCompleted } = useMediaProgress(
+		lessonId,
 		initialProgress
 	);
 
-	// Загружаем все signed URLs одним запросом
+	// Восстанавливаем позиции и настраиваем трекинг
 	useEffect(() => {
-		const loadUrls = async () => {
-			try {
-				const response = await fetch(
-					`/api/media-urls?courseSlug=${encodeURIComponent(
-						courseSlug
-					)}&lessonSlug=${encodeURIComponent(lessonSlug)}`
-				);
-				if (!response.ok) {
-					console.error("Failed to load media URLs:", response.statusText);
-					return;
-				}
-
-				const data = (await response.json()) as { assetsById: AssetsById };
-				setAssetsById(data.assetsById);
-				setUrlsLoaded(true);
-			} catch (error) {
-				console.error("Error loading media URLs:", error);
-			}
-		};
-
-		loadUrls();
-	}, [courseSlug, lessonSlug]);
-
-	// Применяем URLs и восстанавливаем позиции
-	useEffect(() => {
-		if (!containerRef.current || !urlsLoaded || !assetsById) return;
+		if (!containerRef.current) return;
 
 		const container = containerRef.current;
 
@@ -268,31 +231,22 @@ export function LessonContent({
 
 		const cleanupFunctions: Array<() => void> = [];
 
-		// Применяем URLs к видео
+		// Настраиваем видео
 		videoElements.forEach((video) => {
 			const assetId = video.getAttribute("data-asset-id");
 			if (!assetId) return;
 
-			const asset = assetsById[assetId];
-			if (!asset) {
-				console.warn(`Asset not found: ${assetId}`);
-				return;
-			}
-
-			video.src = asset.url;
-
 			// Восстанавливаем позицию из initialProgress
-			if (initialProgress) {
-				const mediaPos = initialProgress.mediaPositions.find(
-					(mp) => mp.assetId === assetId
-				);
-				if (mediaPos && mediaPos.positionSec > 0) {
+			if (initialProgress?.assets[assetId]) {
+				const progress = initialProgress.assets[assetId];
+				if (progress.positionSeconds > 0) {
 					const handleLoadedMetadata = () => {
-						if (video.duration && !isNaN(video.duration)) {
+						if (video.duration && !isNaN(video.duration) && video.duration > 0) {
 							video.currentTime = Math.min(
-								mediaPos.positionSec,
+								progress.positionSeconds,
 								video.duration - 1
 							);
+							updateDuration(assetId, video.duration);
 						}
 					};
 					video.addEventListener("loadedmetadata", handleLoadedMetadata, {
@@ -304,11 +258,21 @@ export function LessonContent({
 				}
 			}
 
+			// Сохраняем duration при загрузке
+			const handleLoadedMetadata = () => {
+				if (video.duration && !isNaN(video.duration) && video.duration > 0) {
+					updateDuration(assetId, video.duration);
+				}
+			};
+			video.addEventListener("loadedmetadata", handleLoadedMetadata);
+			cleanupFunctions.push(() => {
+				video.removeEventListener("loadedmetadata", handleLoadedMetadata);
+			});
+
 			// Трекинг позиции
 			const handleTimeUpdate = () => {
 				updatePosition(assetId, video.currentTime);
 			};
-
 			video.addEventListener("timeupdate", handleTimeUpdate);
 			cleanupFunctions.push(() => {
 				video.removeEventListener("timeupdate", handleTimeUpdate);
@@ -317,7 +281,7 @@ export function LessonContent({
 			// Completion для primary video
 			const isPrimary =
 				video.closest("figure")?.getAttribute("data-required") === "true";
-			if (isPrimary && !isCompleted) {
+			if (isPrimary) {
 				const handleTimeUpdateForCompletion = () => {
 					if (
 						video.duration &&
@@ -326,49 +290,55 @@ export function LessonContent({
 					) {
 						const progress = video.currentTime / video.duration;
 						if (progress >= 0.95) {
-							markCompleted();
+							markCompleted(assetId);
+							video.removeEventListener(
+								"timeupdate",
+								handleTimeUpdateForCompletion
+							);
 						}
 					}
 				};
 
-				const handleEnded = () => {
-					markCompleted();
-				};
-
 				video.addEventListener("timeupdate", handleTimeUpdateForCompletion);
-				video.addEventListener("ended", handleEnded, { once: true });
 				cleanupFunctions.push(() => {
 					video.removeEventListener("timeupdate", handleTimeUpdateForCompletion);
-					video.removeEventListener("ended", handleEnded);
 				});
+
+				video.addEventListener(
+					"ended",
+					() => {
+						markCompleted(assetId);
+					},
+					{ once: true }
+				);
 			}
+
+			// Обработка ошибок
+			const handleError = () => {
+				setErrorAssetId(assetId);
+			};
+			video.addEventListener("error", handleError);
+			cleanupFunctions.push(() => {
+				video.removeEventListener("error", handleError);
+			});
 		});
 
-		// Применяем URLs к аудио
+		// Настраиваем аудио
 		audioElements.forEach((audio) => {
 			const assetId = audio.getAttribute("data-asset-id");
 			if (!assetId) return;
 
-			const asset = assetsById[assetId];
-			if (!asset) {
-				console.warn(`Asset not found: ${assetId}`);
-				return;
-			}
-
-			audio.src = asset.url;
-
 			// Восстанавливаем позицию из initialProgress
-			if (initialProgress) {
-				const mediaPos = initialProgress.mediaPositions.find(
-					(mp) => mp.assetId === assetId
-				);
-				if (mediaPos && mediaPos.positionSec > 0) {
+			if (initialProgress?.assets[assetId]) {
+				const progress = initialProgress.assets[assetId];
+				if (progress.positionSeconds > 0) {
 					const handleLoadedMetadata = () => {
-						if (audio.duration && !isNaN(audio.duration)) {
+						if (audio.duration && !isNaN(audio.duration) && audio.duration > 0) {
 							audio.currentTime = Math.min(
-								mediaPos.positionSec,
+								progress.positionSeconds,
 								audio.duration - 1
 							);
+							updateDuration(assetId, audio.duration);
 						}
 					};
 					audio.addEventListener("loadedmetadata", handleLoadedMetadata, {
@@ -380,34 +350,38 @@ export function LessonContent({
 				}
 			}
 
+			// Сохраняем duration при загрузке
+			const handleLoadedMetadata = () => {
+				if (audio.duration && !isNaN(audio.duration) && audio.duration > 0) {
+					updateDuration(assetId, audio.duration);
+				}
+			};
+			audio.addEventListener("loadedmetadata", handleLoadedMetadata);
+			cleanupFunctions.push(() => {
+				audio.removeEventListener("loadedmetadata", handleLoadedMetadata);
+			});
+
 			// Трекинг позиции
 			const handleTimeUpdate = () => {
 				updatePosition(assetId, audio.currentTime);
 			};
-
 			audio.addEventListener("timeupdate", handleTimeUpdate);
 			cleanupFunctions.push(() => {
 				audio.removeEventListener("timeupdate", handleTimeUpdate);
 			});
+
+			// Обработка ошибок
+			const handleError = () => {
+				setErrorAssetId(assetId);
+			};
+			audio.addEventListener("error", handleError);
+			cleanupFunctions.push(() => {
+				audio.removeEventListener("error", handleError);
+			});
 		});
 
-		// Применяем URLs к download links
+		// Стилизуем download links
 		downloadLinks.forEach((link) => {
-			const assetId = link.getAttribute("data-asset-id");
-			if (!assetId) return;
-
-			const asset = assetsById[assetId];
-			if (!asset) {
-				console.warn(`Asset not found: ${assetId}`);
-				return;
-			}
-
-			link.href = asset.url;
-			// Убираем disabled классы
-			link.classList.remove("pointer-events-none", "opacity-50");
-			link.removeAttribute("aria-disabled");
-
-			// Стилизуем ссылку как кнопку
 			if (!link.classList.contains("download-button-styled")) {
 				link.classList.add(
 					"download-button-styled",
@@ -441,14 +415,42 @@ export function LessonContent({
 		return () => {
 			cleanupFunctions.forEach((cleanup) => cleanup());
 		};
-	}, [html, urlsLoaded, assetsById, initialProgress, updatePosition, markCompleted, isCompleted, courseSlug, lessonSlug]);
+	}, [html, initialProgress, updatePosition, updateDuration, markCompleted, lessonId]);
+
+	const handleRetry = useCallback(() => {
+		if (!errorAssetId || !containerRef.current) return;
+
+		const element = containerRef.current.querySelector(
+			`[data-asset-id="${errorAssetId}"]`
+		) as HTMLVideoElement | HTMLAudioElement | null;
+
+		if (element) {
+			// Перезагружаем медиа
+			const src = element.src;
+			element.src = "";
+			setTimeout(() => {
+				element.src = src;
+				element.load();
+			}, 100);
+			setErrorAssetId(null);
+		}
+	}, [errorAssetId]);
 
 	return (
-		<div className="max-w-3xl mx-auto" ref={containerRef} data-lesson-content>
-			<article
-				className="prose prose-lg max-w-none dark:prose-invert prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-a:text-primary hover:prose-a:text-primary/80"
-				dangerouslySetInnerHTML={{ __html: html }}
-			/>
-		</div>
+		<>
+			<div
+				className="max-w-3xl mx-auto"
+				ref={containerRef}
+				data-lesson-content
+			>
+				<article
+					className="prose prose-lg max-w-none dark:prose-invert prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-a:text-primary hover:prose-a:text-primary/80"
+					dangerouslySetInnerHTML={{ __html: html }}
+				/>
+			</div>
+			{errorAssetId && (
+				<MediaErrorToast assetId={errorAssetId} onRetry={handleRetry} />
+			)}
+		</>
 	);
 }

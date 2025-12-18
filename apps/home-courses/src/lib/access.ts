@@ -40,6 +40,75 @@ export async function requireUserEmail(): Promise<string | NextResponse> {
 }
 
 /**
+ * Парсит JWT и извлекает поле sub (user_id)
+ * JWT формат: header.payload.signature (base64url)
+ */
+function extractSubFromJWT(token: string): string | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    
+    // Декодируем payload (вторая часть)
+    const payload = parts[1];
+    // Добавляем padding если нужно (base64url может быть без padding)
+    const padded = payload + '='.repeat((4 - payload.length % 4) % 4);
+    const decoded = atob(padded.replace(/-/g, '+').replace(/_/g, '/'));
+    const parsed = JSON.parse(decoded);
+    
+    return parsed.sub || null;
+  } catch (error) {
+    console.error('Failed to parse JWT:', error);
+    return null;
+  }
+}
+
+/**
+ * Извлекает user_id (sub) из JWT cookie Cloudflare Access
+ * @returns user_id или null если не найден
+ */
+export async function getUserIdOrNull(): Promise<string | null> {
+  const h = await headers();
+  const cookieHeader = h.get("cookie");
+  
+  if (!cookieHeader) return null;
+  
+  // Ищем CF_Authorization cookie (стандартный для Cloudflare Access)
+  const match = cookieHeader.match(/CF_Authorization=([^;]+)/);
+  if (!match) {
+    // Fallback: ищем другие возможные cookie names
+    const altMatch = cookieHeader.match(/(?:CF_|cf_)?[Aa]uthorization=([^;]+)/);
+    if (!altMatch) return null;
+    return extractSubFromJWT(altMatch[1]);
+  }
+  
+  return extractSubFromJWT(match[1]);
+}
+
+/**
+ * Требует авторизованного пользователя и возвращает user_id
+ * Возвращает либо user_id (string), либо NextResponse с 401 статусом
+ * Использует JWT sub как основной идентификатор, fallback на email
+ */
+export async function requireUserId(): Promise<string | NextResponse> {
+  const userId = await getUserIdOrNull();
+  
+  if (!userId) {
+    // Fallback на email если JWT недоступен (для обратной совместимости)
+    const email = await getUserEmailOrNull();
+    if (email) {
+      // Используем email как user_id (для обратной совместимости)
+      return email;
+    }
+    return NextResponse.json(
+      { error: "Unauthorized: no user identifier found" },
+      { status: 401 }
+    );
+  }
+  
+  return userId;
+}
+
+/**
  * @deprecated Используйте requireUserEmail() для API routes или getUserEmailOrNull() для других случаев.
  * Оставлена для обратной совместимости.
  */

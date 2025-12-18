@@ -39,7 +39,7 @@ export async function GET(
 	// Используйте подписанные URL напрямую через home-courses-media
 	if (process.env.NODE_ENV !== "development") {
 		return new Response(
-			"Media is no longer served through this endpoint. Please use signed URLs from /api/media-url",
+			"Media is no longer served through this endpoint. Please use direct /media/<r2Key> URLs",
 			{ status: 410 }
 		);
 	}
@@ -93,7 +93,7 @@ export async function HEAD(
 	// Используйте подписанные URL напрямую через home-courses-media
 	if (process.env.NODE_ENV !== "development") {
 		return new Response(
-			"Media is no longer served through this endpoint. Please use signed URLs from /api/media-url",
+			"Media is no longer served through this endpoint. Please use direct /media/<r2Key> URLs",
 			{ status: 410 }
 		);
 	}

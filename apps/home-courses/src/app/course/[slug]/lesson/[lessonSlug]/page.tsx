@@ -7,12 +7,11 @@ import { Breadcrumbs } from "@/components/layout/Breadcrumbs";
 import { LessonSidebar } from "@/components/lesson/LessonSidebar";
 import { LessonContent } from "@/components/lesson/LessonContent";
 import { LessonNavigation, MobileLessonNav } from "@/components/lesson/LessonNavigation";
-import { MarkCompletedButton } from "@/components/lesson/MarkCompletedButton";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { requireUserEmail } from "@/lib/access";
+import { requireUserId } from "@/lib/access";
 
 export const dynamic = "force-dynamic";
 
@@ -37,70 +36,57 @@ export default async function LessonPage({
   }
 
   const html = await loadHtml(lesson.contentHtmlKey);
+  
+  // Формируем lessonId для нового API
+  const lessonId = `${slug}/${lessonSlug}`;
 
-  // Загружаем прогресс урока
+  // Загружаем прогресс урока напрямую из БД
   let initialProgress = null;
   try {
-    const emailOrResponse = await requireUserEmail();
-    if (!(emailOrResponse instanceof Response)) {
-      const email = emailOrResponse;
+    const userIdOrResponse = await requireUserId();
+    if (!(userIdOrResponse instanceof Response)) {
+      const userId = userIdOrResponse;
       const { env } = await getCloudflareContext({ async: true });
       
-      // Загружаем прогресс урока
-      const progressRow = await env.COURSE_DB
+      // Загружаем прогресс всех ассетов урока
+      const rows = await env.COURSE_DB
         .prepare(
-          `SELECT is_completed, time_spent_sec, updated_at_ms
-           FROM progress 
-           WHERE user_email=? AND course_slug=? AND lesson_slug=?`
-        )
-        .bind(email, slug, lessonSlug)
-        .first<{
-          is_completed: number;
-          time_spent_sec: number;
-          updated_at_ms: number;
-        }>();
-
-      // Загружаем позиции медиа
-      const mediaRows = await env.COURSE_DB
-        .prepare(
-          `SELECT asset_id, asset_type, position_sec, updated_at_ms
+          `SELECT asset_id, position_seconds, duration_seconds, completed, updated_at
            FROM media_progress
-           WHERE user_email=? AND course_slug=? AND lesson_slug=?`
+           WHERE user_id=? AND lesson_id=?`
         )
-        .bind(email, slug, lessonSlug)
+        .bind(userId, lessonId)
         .all<{
           asset_id: string;
-          asset_type: string;
-          position_sec: number;
-          updated_at_ms: number;
+          position_seconds: number;
+          duration_seconds: number | null;
+          completed: number;
+          updated_at: string;
         }>();
 
-      const mediaPositions = (mediaRows.results ?? []).map((row) => ({
-        assetId: row.asset_id,
-        assetType: row.asset_type as "video" | "audio",
-        positionSec: row.position_sec,
-        updatedAtMs: row.updated_at_ms,
-      }));
+      const assets: Record<
+        string,
+        {
+          positionSeconds: number;
+          durationSeconds: number | null;
+          completed: boolean;
+          updatedAt: string;
+        }
+      > = {};
 
-      if (progressRow) {
-        initialProgress = {
-          courseSlug: slug,
-          lessonSlug,
-          isCompleted: progressRow.is_completed === 1,
-          timeSpentSec: progressRow.time_spent_sec,
-          updatedAtMs: progressRow.updated_at_ms,
-          mediaPositions,
-        };
-      } else {
-        initialProgress = {
-          courseSlug: slug,
-          lessonSlug,
-          isCompleted: false,
-          timeSpentSec: 0,
-          updatedAtMs: 0,
-          mediaPositions,
+      for (const row of (rows.results ?? [])) {
+        assets[row.asset_id] = {
+          positionSeconds: row.position_seconds,
+          durationSeconds: row.duration_seconds,
+          completed: row.completed === 1,
+          updatedAt: row.updated_at,
         };
       }
+
+      initialProgress = {
+        lessonId,
+        assets,
+      };
     }
   } catch (error) {
     console.error("Failed to load lesson progress:", error);
@@ -209,21 +195,11 @@ export default async function LessonPage({
               <div className="mb-8">
                 <LessonContent 
                   html={html} 
-                  courseSlug={slug}
-                  lessonSlug={lessonSlug}
+                  lessonId={lessonId}
                   initialProgress={initialProgress}
                 />
               </div>
             )}
-
-            {/* Mark Completed Button */}
-            <div className="mb-8 flex justify-center">
-              <MarkCompletedButton
-                courseSlug={slug}
-                lessonSlug={lessonSlug}
-                initialCompleted={initialProgress?.isCompleted ?? false}
-              />
-            </div>
 
             {/* Navigation */}
             <div className="hidden lg:block">

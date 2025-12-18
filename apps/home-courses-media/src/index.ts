@@ -114,15 +114,13 @@ export default {
 			hasSig: !!url.searchParams.get("sig")
 		});
 
-		// Проверка подписи (если секрет настроен)
-		if (env.MEDIA_SIGNING_SECRET) {
-			const expParam = url.searchParams.get("exp");
-			const sigParam = url.searchParams.get("sig");
-			
-			if (!expParam || !sigParam) {
-				return new Response('Missing signature parameters', { status: 403 });
-			}
-			
+		// Проверка подписи только если секрет настроен И есть параметры exp/sig
+		// Если параметров нет - разрешаем публичный доступ (вариант B)
+		const expParam = url.searchParams.get("exp");
+		const sigParam = url.searchParams.get("sig");
+		
+		if (env.MEDIA_SIGNING_SECRET && expParam && sigParam) {
+			// Проверяем подпись только если есть оба параметра
 			const exp = parseInt(expParam, 10);
 			const now = Math.floor(Date.now() / 1000);
 			
@@ -149,8 +147,13 @@ export default {
 				return new Response('Invalid signature', { status: 403 });
 			}
 		} else {
-			// Если секрет не настроен, разрешаем доступ (для разработки)
-			console.warn('MEDIA_SIGNING_SECRET is not configured, allowing access without signature verification');
+			// Публичный доступ (вариант B) - нет параметров подписи или секрет не настроен
+			console.log('Public media access (no signature required)', { 
+				key, 
+				hasSecret: !!env.MEDIA_SIGNING_SECRET,
+				hasExp: !!expParam,
+				hasSig: !!sigParam
+			});
 		}
 
 		let pr: ParsedRange | null = null;
@@ -178,7 +181,8 @@ export default {
 		obj.writeHttpMetadata(headers);
 		headers.set('etag', obj.httpEtag);
 		headers.set('accept-ranges', 'bytes');
-		headers.set('cache-control', 'private, max-age=300');
+		// Публичный кэш для варианта B (1 час)
+		headers.set('cache-control', 'public, max-age=3600');
 
 		// [Best Practice] иногда помогает убрать HTTP/3-переиспользование через Alt-Svc
 		headers.set('alt-svc', 'clear');
