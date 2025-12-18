@@ -57,7 +57,16 @@ export async function GET(
   pick(req, "if-match", h);
   pick(req, "if-unmodified-since", h);
 
+  // #region agent log
+  const proxyStartTime = Date.now();
+  const rangeHeader = req.headers.get("range");
+  // #endregion
+
   const res = await env.MEDIA.fetch(upstreamUrl, { method: "GET", headers: h });
+
+  // #region agent log
+  const proxyEndTime = Date.now();
+  // #endregion
 
   const out = new Headers();
 
@@ -78,6 +87,27 @@ export async function GET(
   // Для Range requests важно сохранить статус 206 (Partial Content)
   // Если upstream вернул 206, передаем его дальше
   const status = res.status;
+
+  // #region agent log
+  // Логируем через console.log, так как это серверный код
+  console.log(JSON.stringify({
+    location: 'route.ts:83',
+    message: 'media proxy response',
+    data: {
+      key: keyArray.join('/'),
+      upstreamUrl,
+      status,
+      rangeHeader,
+      contentLength: res.headers.get('content-length'),
+      contentRange: res.headers.get('content-range'),
+      duration: proxyEndTime - proxyStartTime
+    },
+    timestamp: Date.now(),
+    sessionId: 'debug-session',
+    runId: 'run1',
+    hypothesisId: 'B'
+  }));
+  // #endregion
 
   // Убеждаемся, что body передается корректно для streaming
   return new Response(res.body, { status, headers: out });

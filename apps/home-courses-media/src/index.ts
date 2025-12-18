@@ -124,6 +124,18 @@ export default {
 			const exp = parseInt(expParam, 10);
 			const now = Math.floor(Date.now() / 1000);
 			
+			// #region agent log
+			console.log(JSON.stringify({
+				location: 'index.ts:128',
+				message: 'signature check',
+				data: { key, exp, now, diff: now - exp, expired: now > exp },
+				timestamp: Date.now(),
+				sessionId: 'debug-session',
+				runId: 'run1',
+				hypothesisId: 'G'
+			}));
+			// #endregion
+			
 			// Проверяем, не истекла ли подпись
 			if (!Number.isFinite(exp) || now > exp) {
 				console.error('Link expired', { exp, now, diff: now - exp });
@@ -164,8 +176,35 @@ export default {
 			return new Response('Range Not Satisfiable', { status: 416 });
 		}
 
+		// #region agent log
+		const r2StartTime = Date.now();
+		const rangeHeader = req.headers.get('range');
+		console.log(JSON.stringify({
+			location: 'index.ts:168',
+			message: 'R2 get before',
+			data: { key, range: pr, rangeHeader },
+			timestamp: Date.now(),
+			sessionId: 'debug-session',
+			runId: 'run1',
+			hypothesisId: 'C'
+		}));
+		// #endregion
+
 		// parseKey уже возвращает декодированный ключ, используем его напрямую для R2
 		const obj = await env.COURSE_MEDIA.get(key, pr ? { range: pr } : {});
+
+		// #region agent log
+		const r2EndTime = Date.now();
+		console.log(JSON.stringify({
+			location: 'index.ts:170',
+			message: 'R2 get after',
+			data: { key, found: !!obj, size: obj?.size, duration: r2EndTime - r2StartTime },
+			timestamp: Date.now(),
+			sessionId: 'debug-session',
+			runId: 'run1',
+			hypothesisId: 'C'
+		}));
+		// #endregion
 
 		if (!obj) return new Response('Not Found', { status: 404 });
 
@@ -207,6 +246,18 @@ export default {
 
 			headers.set('content-range', `bytes ${start}-${end}/${total}`);
 			headers.set('content-length', String(len));
+
+			// #region agent log
+			console.log(JSON.stringify({
+				location: 'index.ts:214',
+				message: 'Range response',
+				data: { key, start, end, len, total, method: req.method },
+				timestamp: Date.now(),
+				sessionId: 'debug-session',
+				runId: 'run1',
+				hypothesisId: 'D'
+			}));
+			// #endregion
 
 			// HEAD поддержи (полезно для дебага/плееров)
 			if (req.method === 'HEAD') return new Response(null, { status: 206, headers });

@@ -110,18 +110,35 @@ function VideoContent({ videoAsset, isLoading, hasError, savedPosition, onLoad, 
     if (!videoAsset) return;
 
     const loadSignedUrl = async () => {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/5b410915-a238-4000-9f42-54b539ef31be',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MediaPlayer.tsx:112',message:'loadSignedUrl start',data:{r2Key:videoAsset.r2Key},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+      // #endregion
       try {
         setUrlLoading(true);
         setUrlError(false);
+        const urlStartTime = Date.now();
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5b410915-a238-4000-9f42-54b539ef31be',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MediaPlayer.tsx:116',message:'fetch /api/media-url before',data:{r2Key:videoAsset.r2Key,urlStartTime},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         const response = await fetch(`/api/media-url?key=${encodeURIComponent(videoAsset.r2Key)}`);
+        const urlEndTime = Date.now();
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5b410915-a238-4000-9f42-54b539ef31be',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MediaPlayer.tsx:118',message:'fetch /api/media-url after',data:{r2Key:videoAsset.r2Key,status:response.status,statusText:response.statusText,ok:response.ok,duration:urlEndTime-urlStartTime},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         
         if (!response.ok) {
           throw new Error(`Failed to get signed URL: ${response.statusText}`);
         }
         
         const data = await response.json() as { url: string };
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5b410915-a238-4000-9f42-54b539ef31be',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MediaPlayer.tsx:123',message:'signed URL received',data:{r2Key:videoAsset.r2Key,url:data.url,hasExp:data.url.includes('exp='),hasSig:data.url.includes('sig=')},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         setSignedUrl(data.url);
       } catch (error) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/5b410915-a238-4000-9f42-54b539ef31be',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MediaPlayer.tsx:125',message:'loadSignedUrl error',data:{r2Key:videoAsset.r2Key,error:error instanceof Error?error.message:String(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         console.error("Failed to load signed media URL:", error);
         setUrlError(true);
       } finally {
@@ -189,8 +206,40 @@ function VideoContent({ videoAsset, isLoading, hasError, savedPosition, onLoad, 
           className="w-full h-full"
           controls
           preload="metadata"
-          onLoadedData={onLoad}
-          onError={onError}
+          onLoadedData={() => {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/5b410915-a238-4000-9f42-54b539ef31be',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MediaPlayer.tsx:192',message:'video onLoadedData',data:{r2Key:videoAsset.r2Key,readyState:videoRef.current?.readyState,duration:videoRef.current?.duration,buffered:videoRef.current?.buffered.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+            // #endregion
+            onLoad();
+          }}
+          onError={(e) => {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/5b410915-a238-4000-9f42-54b539ef31be',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MediaPlayer.tsx:193',message:'video onError',data:{r2Key:videoAsset.r2Key,error:videoRef.current?.error?.code,errorMessage:videoRef.current?.error?.message,networkState:videoRef.current?.networkState,readyState:videoRef.current?.readyState},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+            // #endregion
+            onError();
+          }}
+          onWaiting={() => {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/5b410915-a238-4000-9f42-54b539ef31be',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MediaPlayer.tsx:194',message:'video onWaiting',data:{r2Key:videoAsset.r2Key,readyState:videoRef.current?.readyState,buffered:videoRef.current?.buffered.length,currentTime:videoRef.current?.currentTime},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+            // #endregion
+          }}
+          onStalled={() => {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/5b410915-a238-4000-9f42-54b539ef31be',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MediaPlayer.tsx:195',message:'video onStalled',data:{r2Key:videoAsset.r2Key,readyState:videoRef.current?.readyState,networkState:videoRef.current?.networkState,currentTime:videoRef.current?.currentTime},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+            // #endregion
+          }}
+          onProgress={() => {
+            // #region agent log
+            if (videoRef.current) {
+              const buffered = videoRef.current.buffered;
+              const ranges = [];
+              for (let i = 0; i < buffered.length; i++) {
+                ranges.push({start: buffered.start(i), end: buffered.end(i)});
+              }
+              fetch('http://127.0.0.1:7242/ingest/5b410915-a238-4000-9f42-54b539ef31be',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MediaPlayer.tsx:196',message:'video onProgress',data:{r2Key:videoAsset.r2Key,readyState:videoRef.current.readyState,currentTime:videoRef.current.currentTime,bufferedRanges:ranges},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+            }
+            // #endregion
+          }}
         >
           <source src={signedUrl} type={videoAsset.mime} />
           Your browser does not support the video tag.

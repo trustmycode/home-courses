@@ -23,10 +23,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    const root = window.document.documentElement;
-    root.classList.remove("light", "dark");
-    root.classList.add(theme);
-    localStorage.setItem("theme", theme);
+    if (typeof window !== "undefined") {
+      const root = window.document.documentElement;
+      // Удаляем все классы темы
+      root.classList.remove("light", "dark");
+      // Добавляем текущую тему
+      root.classList.add(theme);
+      // Сохраняем в localStorage
+      localStorage.setItem("theme", theme);
+    }
   }, [theme]);
 
   const toggleTheme = () => {
