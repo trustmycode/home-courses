@@ -59,10 +59,12 @@ export function LessonCard({
 				<div className="flex items-start gap-4 mb-4">
 					<div
 						className={cn(
-							"flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
+							"flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-sm font-semibold",
 							isCompleted
-								? "bg-primary/10 text-primary border-2 border-primary"
-								: "bg-muted text-muted-foreground"
+								? "bg-primary/10 text-primary"
+								: isInProgress
+									? "bg-primary text-primary-foreground"
+									: "bg-muted text-muted-foreground"
 						)}
 					>
 						{isCompleted ? (
