@@ -46,18 +46,36 @@ export async function requireUserEmail(): Promise<string | NextResponse> {
 function extractSubFromJWT(token: string): string | null {
   try {
     const parts = token.split('.');
-    if (parts.length !== 3) return null;
+    if (parts.length !== 3) {
+      console.warn('Invalid JWT format: expected 3 parts, got', parts.length);
+      return null;
+    }
     
     // Декодируем payload (вторая часть)
     const payload = parts[1];
+    if (!payload) {
+      console.warn('Empty JWT payload');
+      return null;
+    }
+    
     // Добавляем padding если нужно (base64url может быть без padding)
     const padded = payload + '='.repeat((4 - payload.length % 4) % 4);
+    
+    // В Cloudflare Workers atob доступен глобально
     const decoded = atob(padded.replace(/-/g, '+').replace(/_/g, '/'));
     const parsed = JSON.parse(decoded);
     
-    return parsed.sub || null;
+    const sub = parsed.sub || null;
+    if (!sub) {
+      console.warn('JWT payload does not contain "sub" field:', Object.keys(parsed));
+    }
+    
+    return sub;
   } catch (error) {
     console.error('Failed to parse JWT:', error);
+    if (error instanceof Error) {
+      console.error('Error details:', error.message, error.stack);
+    }
     return null;
   }
 }
@@ -67,21 +85,32 @@ function extractSubFromJWT(token: string): string | null {
  * @returns user_id или null если не найден
  */
 export async function getUserIdOrNull(): Promise<string | null> {
-  const h = await headers();
-  const cookieHeader = h.get("cookie");
-  
-  if (!cookieHeader) return null;
-  
-  // Ищем CF_Authorization cookie (стандартный для Cloudflare Access)
-  const match = cookieHeader.match(/CF_Authorization=([^;]+)/);
-  if (!match) {
-    // Fallback: ищем другие возможные cookie names
-    const altMatch = cookieHeader.match(/(?:CF_|cf_)?[Aa]uthorization=([^;]+)/);
-    if (!altMatch) return null;
-    return extractSubFromJWT(altMatch[1]);
+  try {
+    const h = await headers();
+    const cookieHeader = h.get("cookie");
+    
+    if (!cookieHeader) {
+      console.log('No cookie header found');
+      return null;
+    }
+    
+    // Ищем CF_Authorization cookie (стандартный для Cloudflare Access)
+    const match = cookieHeader.match(/CF_Authorization=([^;]+)/);
+    if (!match) {
+      // Fallback: ищем другие возможные cookie names
+      const altMatch = cookieHeader.match(/(?:CF_|cf_)?[Aa]uthorization=([^;]+)/);
+      if (!altMatch) {
+        console.log('No CF_Authorization cookie found in header');
+        return null;
+      }
+      return extractSubFromJWT(altMatch[1]);
+    }
+    
+    return extractSubFromJWT(match[1]);
+  } catch (error) {
+    console.error('Error in getUserIdOrNull:', error);
+    return null;
   }
-  
-  return extractSubFromJWT(match[1]);
 }
 
 /**
