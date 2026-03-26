@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "lessonSlug": "03-lesson",
+  "assets": {
+    "intro-video": {
+      "type": "video",
+      "title": "Избыточная тревога",
+      "r2Key": "courses/01-anna-vladimirovna-stop-trevoga/03-lesson/03-lesson-izbitochnaya-trevoga.mp4",
+      "mime": "video/mp4"
+    },
+    "cooling-video": {
+      "type": "video",
+      "title": "Техника «Охлаждение миндалины»",
+      "r2Key": "courses/01-anna-vladimirovna-stop-trevoga/03-lesson/03-lesson-ohlajdeniye-mindalini-tehnika.mp4",
+      "mime": "video/mp4"
+    },
+    "breath-video": {
+      "type": "video",
+      "title": "Техника «Вдох-довдох»",
+      "r2Key": "courses/01-anna-vladimirovna-stop-trevoga/03-lesson/03-lesson-vdoh-dovdoh-tehnika.mp4",
+      "mime": "video/mp4"
+    }
+  }
+}
+

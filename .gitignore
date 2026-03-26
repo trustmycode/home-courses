@@ -82,3 +82,9 @@ next-env.d.ts
 
 # content
 **/content/
+
+# generated course artifacts
+.generated/
+**/.generated/
+.temp-processed-videos/
+**/.temp-processed-videos/

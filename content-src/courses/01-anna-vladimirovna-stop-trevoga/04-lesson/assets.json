@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "lessonSlug": "04-lesson",
+  "assets": {
+    "intro-video": {
+      "type": "video",
+      "title": "Фоновая (хроническая) тревога",
+      "r2Key": "courses/01-anna-vladimirovna-stop-trevoga/04-lesson/04-lesson-fonovaya-trevoga.mp4",
+      "mime": "video/mp4"
+    },
+    "checklist-pdf": {
+      "type": "pdf",
+      "title": "10 вопросов, которые пошагово уменьшают тревогу",
+      "r2Key": "courses/01-anna-vladimirovna-stop-trevoga/04-lesson/04-lesson-10-voprosov-kotoriye-umenshayut-trevogu.pdf",
+      "mime": "application/pdf"
+    },
+    "technique-video": {
+      "type": "video",
+      "title": "Техника «Сдвиг по оси»",
+      "r2Key": "courses/01-anna-vladimirovna-stop-trevoga/04-lesson/04-lesson-sdvig-po-osi-tehnika.mp4",
+      "mime": "video/mp4"
+    }
+  }
+}
+

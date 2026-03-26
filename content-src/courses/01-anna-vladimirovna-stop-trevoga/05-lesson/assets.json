@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "lessonSlug": "05-lesson",
+  "assets": {
+    "neuro-meditation": {
+      "type": "audio",
+      "title": "Нейромедитация",
+      "r2Key": "courses/01-anna-vladimirovna-stop-trevoga/05-lesson/05-lesson-bonus-neyromeditaciya.mp3",
+      "mime": "audio/mp3"
+    },
+    "neuro-sensory": {
+      "type": "audio",
+      "title": "Нейросенсорная стимуляция БАЛАНС",
+      "r2Key": "courses/01-anna-vladimirovna-stop-trevoga/05-lesson/05-lesson-bonus-neyrosensornaya-stimulaciya.mp3",
+      "mime": "audio/mp3"
+    }
+  }
+}
+

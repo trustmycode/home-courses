@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "lessonSlug": "01-lesson",
+  "assets": {
+    "intro-video": {
+      "type": "video",
+      "title": "Типы тревоги",
+      "r2Key": "courses/01-anna-vladimirovna-stop-trevoga/01-lesson/01-lesson-tipi-trevogi.mp4",
+      "mime": "video/mp4"
+    },
+    "intro-guide": {
+      "type": "pdf",
+      "title": "Карта тревоги",
+      "r2Key": "courses/01-anna-vladimirovna-stop-trevoga/01-lesson/01-lesson-karta-trevogi.pdf",
+      "mime": "application/pdf"
+    },
+    "technique-video": {
+      "type": "video",
+      "title": "Техника «Нейрокарта тревоги»",
+      "r2Key": "courses/01-anna-vladimirovna-stop-trevoga/01-lesson/01-lesson-neyrokarta-trevogi-tehnika.mp4",
+      "mime": "video/mp4"
+    }
+  }
+}
+

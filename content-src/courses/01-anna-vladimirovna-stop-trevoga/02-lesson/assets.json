@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "lessonSlug": "02-lesson",
+  "assets": {
+    "intro-video": {
+      "type": "video",
+      "title": "Адаптивная тревога",
+      "r2Key": "courses/01-anna-vladimirovna-stop-trevoga/02-lesson/02-lesson-adaptivnaya-trevoga.mp4",
+      "mime": "video/mp4"
+    },
+    "technique-video": {
+      "type": "video",
+      "title": "Техника «3-6-9»",
+      "r2Key": "courses/01-anna-vladimirovna-stop-trevoga/02-lesson/02-lesson-3-6-9-tehnika.mp4",
+      "mime": "video/mp4"
+    }
+  }
+}
+
