@@ -16,7 +16,7 @@ jobs:
       run:
         working-directory: apps/home-courses
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v4
         with:
           version: 11.9.0
@@ -36,7 +36,7 @@ jobs:
       run:
         working-directory: apps/home-courses-media
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -51,5 +51,5 @@ jobs:
     name: Миграции D1
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: bash scripts/verify-migrations.sh
