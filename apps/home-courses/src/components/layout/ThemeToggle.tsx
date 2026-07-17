@@ -19,7 +19,7 @@ export function ThemeToggle() {
       ) : (
         <Sun className="h-4 w-4" />
       )}
-      <span className="sr-only">Toggle theme</span>
+      <span className="sr-only">Переключить тему</span>
     </Button>
   );
 }

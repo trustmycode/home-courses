@@ -1,17 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { AlertCircle, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface MediaErrorToastProps {
-	assetId: string;
 	onRetry?: () => void;
 	onDismiss?: () => void;
 }
 
 export function MediaErrorToast({
-	assetId,
 	onRetry,
 	onDismiss,
 }: MediaErrorToastProps) {

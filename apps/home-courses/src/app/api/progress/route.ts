@@ -2,186 +2,146 @@ import { NextResponse } from "next/server";
 import { requireUserId } from "@/lib/access";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
+const LESSON_ID_PATTERN = /^[a-z0-9][a-z0-9_-]{0,79}\/[a-z0-9][a-z0-9_-]{0,79}$/i;
+const ASSET_ID_PATTERN = /^[a-z0-9][a-z0-9._:-]{0,159}$/i;
+const MAX_MEDIA_SECONDS = 7 * 24 * 60 * 60;
+
+function validSeconds(value: unknown, optional = false): value is number | undefined {
+  if (optional && value === undefined) return true;
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= MAX_MEDIA_SECONDS;
+}
+
 export async function GET(req: Request) {
-	try {
-		const { env } = await getCloudflareContext({ async: true });
-		const userIdOrResponse = await requireUserId();
-		if (userIdOrResponse instanceof NextResponse) return userIdOrResponse;
-		const userId = userIdOrResponse;
+  try {
+    const { env } = await getCloudflareContext({ async: true });
+    const userIdOrResponse = await requireUserId();
+    if (userIdOrResponse instanceof NextResponse) return userIdOrResponse;
 
-		const url = new URL(req.url);
-		const lessonId = url.searchParams.get("lessonId");
+    const lessonId = new URL(req.url).searchParams.get("lessonId");
+    if (!lessonId || !LESSON_ID_PATTERN.test(lessonId)) {
+      return NextResponse.json({ error: "Некорректный идентификатор урока" }, { status: 400 });
+    }
 
-		if (!lessonId) {
-			return NextResponse.json({ error: "lessonId required" }, { status: 400 });
-		}
+    const rows = await env.COURSE_DB
+      .prepare(
+        `SELECT asset_id, position_seconds, duration_seconds, completed, updated_at
+         FROM media_progress
+         WHERE user_id=? AND lesson_id=?`
+      )
+      .bind(userIdOrResponse, lessonId)
+      .all<{
+        asset_id: string;
+        position_seconds: number;
+        duration_seconds: number | null;
+        completed: number;
+        updated_at: string;
+      }>();
 
-		// Загружаем прогресс всех ассетов урока
-		const rows = await env.COURSE_DB
-			.prepare(
-				`SELECT asset_id, position_seconds, duration_seconds, completed, updated_at
-       FROM media_progress
-       WHERE user_id=? AND lesson_id=?`
-			)
-			.bind(userId, lessonId)
-			.all<{
-				asset_id: string;
-				position_seconds: number;
-				duration_seconds: number | null;
-				completed: number;
-				updated_at: string;
-			}>();
+    const assets: Record<string, {
+      positionSeconds: number;
+      durationSeconds: number | null;
+      completed: boolean;
+      updatedAt: string;
+    }> = {};
 
-		const assets: Record<
-			string,
-			{
-				positionSeconds: number;
-				durationSeconds: number | null;
-				completed: boolean;
-				updatedAt: string;
-			}
-		> = {};
+    for (const row of rows.results ?? []) {
+      assets[row.asset_id] = {
+        positionSeconds: row.position_seconds,
+        durationSeconds: row.duration_seconds,
+        completed: row.completed === 1,
+        updatedAt: row.updated_at,
+      };
+    }
 
-		for (const row of rows.results ?? []) {
-			assets[row.asset_id] = {
-				positionSeconds: row.position_seconds,
-				durationSeconds: row.duration_seconds,
-				completed: row.completed === 1,
-				updatedAt: row.updated_at,
-			};
-		}
-
-		return NextResponse.json({ lessonId, assets });
-	} catch (error) {
-		console.error("Error in GET /api/progress:", error);
-		return NextResponse.json(
-			{ error: "Internal server error", details: error instanceof Error ? error.message : String(error) },
-			{ status: 500 }
-		);
-	}
+    return NextResponse.json({ lessonId, assets });
+  } catch (error) {
+    console.error("Не удалось загрузить прогресс урока", error);
+    return NextResponse.json({ error: "Не удалось загрузить прогресс" }, { status: 500 });
+  }
 }
 
 export async function PUT(req: Request) {
-	try {
-		const { env } = await getCloudflareContext({ async: true });
-		const userIdOrResponse = await requireUserId();
-		if (userIdOrResponse instanceof NextResponse) return userIdOrResponse;
-		const userId = userIdOrResponse;
+  try {
+    const { env } = await getCloudflareContext({ async: true });
+    const userIdOrResponse = await requireUserId();
+    if (userIdOrResponse instanceof NextResponse) return userIdOrResponse;
 
-		// CSRF защита
-		const origin = req.headers.get("origin");
-		const requestUrl = new URL(req.url);
-		const expectedOrigin = requestUrl.origin;
-		const allowedOrigins =
-			process.env.NODE_ENV === "development"
-				? [expectedOrigin, "http://localhost:3000", "http://127.0.0.1:3000"]
-				: [expectedOrigin];
+    const origin = req.headers.get("origin");
+    const requestUrl = new URL(req.url);
+    const allowedOrigins =
+      process.env.NODE_ENV === "development"
+        ? [requestUrl.origin, "http://localhost:3000", "http://127.0.0.1:3000"]
+        : [requestUrl.origin];
+    if (!origin || !allowedOrigins.includes(origin)) {
+      return NextResponse.json({ error: "Недопустимый источник запроса" }, { status: 403 });
+    }
 
-		if (!origin || !allowedOrigins.includes(origin)) {
-			return NextResponse.json(
-				{ error: "Forbidden: invalid origin" },
-				{ status: 403 }
-			);
-		}
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: "Тело запроса должно быть в формате JSON" }, { status: 400 });
+    }
+    if (!body || typeof body !== "object") {
+      return NextResponse.json({ error: "Некорректное тело запроса" }, { status: 400 });
+    }
 
-		const body = (await req.json()) as {
-			lessonId: string;
-			assetId: string;
-			positionSeconds?: number;
-			durationSeconds?: number;
-			completed?: boolean;
-		};
+    const input = body as Record<string, unknown>;
+    const lessonId = input.lessonId;
+    const assetId = input.assetId;
+    const positionSeconds = input.positionSeconds ?? 0;
+    const durationSeconds = input.durationSeconds;
+    const completed = input.completed ?? false;
 
-		const {
-			lessonId,
-			assetId,
-			positionSeconds = 0,
-			durationSeconds,
-			completed = false,
-		} = body;
+    if (
+      typeof lessonId !== "string" ||
+      !LESSON_ID_PATTERN.test(lessonId) ||
+      typeof assetId !== "string" ||
+      !ASSET_ID_PATTERN.test(assetId) ||
+      !validSeconds(positionSeconds) ||
+      !validSeconds(durationSeconds, true) ||
+      typeof completed !== "boolean"
+    ) {
+      return NextResponse.json({ error: "Некорректные данные прогресса" }, { status: 400 });
+    }
 
-		if (!lessonId || !assetId) {
-			return NextResponse.json(
-				{ error: "lessonId and assetId required" },
-				{ status: 400 }
-			);
-		}
+    const [courseSlug, lessonSlug] = lessonId.split("/");
+    await env.COURSE_DB.batch([
+      env.COURSE_DB.prepare("INSERT OR IGNORE INTO users (id) VALUES (?)").bind(userIdOrResponse),
+      env.COURSE_DB
+        .prepare(
+          `INSERT OR IGNORE INTO lessons (lesson_id, course_slug, lesson_slug, title)
+           VALUES (?, ?, ?, ?)`
+        )
+        .bind(lessonId, courseSlug, lessonSlug, lessonSlug),
+      env.COURSE_DB
+        .prepare(
+          `INSERT INTO media_progress
+             (user_id, lesson_id, asset_id, position_seconds, duration_seconds, completed, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+           ON CONFLICT(user_id, lesson_id, asset_id) DO UPDATE SET
+             position_seconds=MAX(media_progress.position_seconds, excluded.position_seconds),
+             duration_seconds=CASE
+               WHEN excluded.duration_seconds IS NULL THEN media_progress.duration_seconds
+               WHEN media_progress.duration_seconds IS NULL THEN excluded.duration_seconds
+               ELSE MAX(media_progress.duration_seconds, excluded.duration_seconds)
+             END,
+             completed=MAX(media_progress.completed, excluded.completed),
+             updated_at=excluded.updated_at`
+        )
+        .bind(
+          userIdOrResponse,
+          lessonId,
+          assetId,
+          positionSeconds,
+          durationSeconds ?? null,
+          completed ? 1 : 0
+        ),
+    ]);
 
-		// Убеждаемся, что пользователь существует
-		try {
-			await env.COURSE_DB.prepare(`INSERT OR IGNORE INTO users (id) VALUES (?)`).bind(userId).run();
-		} catch (error) {
-			console.error("Error creating user:", error);
-			// Продолжаем, возможно таблица не существует или другая ошибка
-		}
-
-		// Убеждаемся, что урок существует (создаем запись если нужно)
-		// lessonId должен быть в формате "courseSlug/lessonSlug"
-		const [courseSlug, lessonSlug] = lessonId.split("/");
-		if (courseSlug && lessonSlug) {
-			try {
-				await env.COURSE_DB
-					.prepare(
-						`INSERT OR IGNORE INTO lessons (lesson_id, course_slug, lesson_slug, title)
-         VALUES (?, ?, ?, ?)`
-					)
-					.bind(lessonId, courseSlug, lessonSlug, lessonSlug) // title можно получить из индекса
-					.run();
-			} catch (error) {
-				console.error("Error creating lesson:", error);
-				// Продолжаем, возможно таблица не существует или другая ошибка
-			}
-		}
-
-		// Upsert прогресса
-		try {
-			await env.COURSE_DB
-				.prepare(
-					`INSERT INTO media_progress (user_id, lesson_id, asset_id, position_seconds, duration_seconds, completed, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
-       ON CONFLICT(user_id, lesson_id, asset_id) DO UPDATE SET
-         position_seconds=excluded.position_seconds,
-         duration_seconds=COALESCE(excluded.duration_seconds, media_progress.duration_seconds),
-         completed=excluded.completed,
-         updated_at=excluded.updated_at`
-				)
-				.bind(
-					userId,
-					lessonId,
-					assetId,
-					positionSeconds,
-					durationSeconds ?? null,
-					completed ? 1 : 0
-				)
-				.run();
-		} catch (error) {
-			console.error("Error upserting media progress:", error);
-			console.error("Details:", {
-				userId,
-				lessonId,
-				assetId,
-				positionSeconds,
-				durationSeconds,
-				completed,
-			});
-			return NextResponse.json(
-				{
-					error: "Failed to save progress",
-					details: error instanceof Error ? error.message : String(error),
-				},
-				{ status: 500 }
-			);
-		}
-
-		return new NextResponse(null, { status: 204 });
-	} catch (error) {
-		console.error("Error in PUT /api/progress:", error);
-		return NextResponse.json(
-			{
-				error: "Internal server error",
-				details: error instanceof Error ? error.message : String(error),
-			},
-			{ status: 500 }
-		);
-	}
+    return new NextResponse(null, { status: 204 });
+  } catch (error) {
+    console.error("Не удалось сохранить прогресс урока", error);
+    return NextResponse.json({ error: "Не удалось сохранить прогресс" }, { status: 500 });
+  }
 }

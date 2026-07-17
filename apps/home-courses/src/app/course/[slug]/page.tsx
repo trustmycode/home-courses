@@ -8,6 +8,8 @@ import { Play } from "lucide-react";
 import Link from "next/link";
 import { getLessonMediaTypes } from "@/lib/progress";
 import { getCourseProgressDirect } from "@/lib/progress-server";
+import { getUserIdOrNull } from "@/lib/access";
+import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +18,7 @@ export default async function CoursePage({
 }: {
 	params: Promise<{ slug: string }>;
 }) {
+	if (!(await getUserIdOrNull())) notFound();
 	const { slug } = await params;
 	const course = await loadCourse(slug);
 	if (!course) {
@@ -48,7 +51,7 @@ export default async function CoursePage({
 				return { lesson, mediaTypes };
 			} catch (error) {
 				console.error(
-					`Failed to load assets for lesson ${lesson.slug}:`,
+					`Не удалось загрузить материалы урока ${lesson.slug}:`,
 					error
 				);
 				return { lesson, mediaTypes: [] };

@@ -2,10 +2,13 @@ import { loadCourses } from "@/lib/content";
 import { Header } from "@/components/layout/Header";
 import { CourseCard } from "@/components/course/CourseCard";
 import { getCourseProgressDirect } from "@/lib/progress-server";
+import { getUserIdOrNull } from "@/lib/access";
+import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
+	if (!(await getUserIdOrNull())) notFound();
 	const courses = await loadCourses();
 
 	// Загружаем прогресс для всех курсов параллельно

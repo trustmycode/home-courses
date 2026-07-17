@@ -19,7 +19,7 @@ export function LessonNavigation({ prevLesson, nextLesson, courseSlug }: LessonN
           <Link href={`/course/${courseSlug}/lesson/${prevLesson.slug}`} prefetch={false}>
             <ChevronLeft className="h-4 w-4 mr-2 shrink-0" />
             <div className="text-left truncate">
-              <span className="text-xs text-muted-foreground block">Previous</span>
+              <span className="text-xs text-muted-foreground block">Предыдущий</span>
               <span className="text-sm font-medium truncate block">{prevLesson.title}</span>
             </div>
           </Link>
@@ -32,7 +32,7 @@ export function LessonNavigation({ prevLesson, nextLesson, courseSlug }: LessonN
         <Button asChild variant="default" className="flex-1 max-w-xs justify-end h-auto py-3">
           <Link href={`/course/${courseSlug}/lesson/${nextLesson.slug}`} prefetch={false}>
             <div className="text-right truncate">
-              <span className="text-xs text-primary-foreground/70 block">Next</span>
+              <span className="text-xs text-primary-foreground/70 block">Следующий</span>
               <span className="text-sm font-medium truncate block">{nextLesson.title}</span>
             </div>
             <ChevronRight className="h-4 w-4 ml-2 shrink-0" />
@@ -54,7 +54,7 @@ export function MobileLessonNav({ prevLesson, nextLesson, courseSlug }: LessonNa
           <Button asChild variant="outline" size="sm" className="flex-1">
             <Link href={`/course/${courseSlug}/lesson/${prevLesson.slug}`} prefetch={false}>
               <ChevronLeft className="h-4 w-4 mr-1" />
-              Previous
+              Назад
             </Link>
           </Button>
         ) : (
@@ -64,13 +64,13 @@ export function MobileLessonNav({ prevLesson, nextLesson, courseSlug }: LessonNa
         {nextLesson ? (
           <Button asChild size="sm" className="flex-1">
             <Link href={`/course/${courseSlug}/lesson/${nextLesson.slug}`} prefetch={false}>
-              Next
+              Далее
               <ChevronRight className="h-4 w-4 ml-1" />
             </Link>
           </Button>
         ) : (
           <Button asChild variant="outline" size="sm" className="flex-1">
-            <Link href={`/course/${courseSlug}`} prefetch={false}>Back to Lessons</Link>
+            <Link href={`/course/${courseSlug}`} prefetch={false}>К списку уроков</Link>
           </Button>
         )}
       </div>

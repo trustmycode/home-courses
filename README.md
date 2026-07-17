@@ -11,7 +11,7 @@
 - `content-src` — исходники курсов в `MDX` и `assets.json`.
 - `tools/render-lesson.mjs` — преобразование урока в HTML с загрузкой результата в `R2`.
 - `tools/process-and-upload-videos.mjs` — обработка видео через `ffmpeg` и загрузка в `R2`.
-- `docs/SETUP_SIGNED_URLS.md` — памятка по настройке подписанных ссылок.
+- `docs/SETUP_MEDIA_ACCESS.md` — настройка внутреннего доступа к материалам.
 - `.gitignore` — правила игнорирования служебных файлов, сборки и крупных медиафайлов.
 
 ## Как устроен проект
@@ -52,12 +52,9 @@
 
 ### Доступ пользователей
 
-В боевом окружении пользователь определяется через `Cloudflare Access`:
+В боевом окружении приложение проверяет RS256-подпись утверждения `Cloudflare Access`, ожидаемого издателя, аудиторию и срок действия. Настройка описана в `docs/SETUP_MEDIA_ACCESS.md`.
 
-- по заголовку `Cf-Access-Authenticated-User-Email`;
-- по куки `CF_Authorization`, из которой извлекается `sub`.
-
-Для локальной разработки приложение умеет подставлять пользователя из переменной `DEV_USER_EMAIL`. Если она не задана, используется значение `developer@localhost`.
+Для локальной разработки пользователь задаётся явно через `DEV_USER_ID` и `DEV_USER_EMAIL`; небезопасного значения по умолчанию нет.
 
 ### Медиа
 
@@ -65,14 +62,15 @@
 
 - читает файлы из той же корзины `R2`;
 - поддерживает заголовок `Range` для видео и аудио;
-- умеет проверять подпись ссылки по секрету `MEDIA_SIGNING_SECRET`;
-- может работать и без проверки подписи, если секрет не настроен.
+- недоступен по публичному адресу `workers.dev`;
+- принимает запросы приложения по служебной привязке и проверяет `MEDIA_INTERNAL_TOKEN`;
+- при отсутствии секрета закрывается с ошибкой 503.
 
 ## Требования
 
 Для работы с репозиторием понадобятся:
 
-- `Node.js` 20 или новее;
+- `Node.js` 22 или новее;
 - `pnpm`;
 - `Wrangler`;
 - доступ к ресурсам `Cloudflare Workers`, `R2`, `D1` и при необходимости `Cloudflare Access`;
@@ -93,7 +91,7 @@ pnpm install
 
 ```bash
 cd apps/home-courses-media
-pnpm install
+npm ci
 ```
 
 ### 2. Подготовить ресурсы Cloudflare
@@ -114,9 +112,7 @@ pnpm install
 
 SQL-файлы лежат в `apps/home-courses/migrations`.
 
-Минимум, который нужен для текущей логики прогресса:
-
-- `0003_public_media_progress.sql`.
+Миграции применяются строго по порядку от `0001` до `0004`. Скрипт `scripts/verify-migrations.sh` проверяет чистое применение и перенос записи со старой схемы.
 
 ### 4. Заполнить `R2` данными курса
 
@@ -143,7 +139,7 @@ pnpm dev
 
 ```bash
 cd apps/home-courses
-DEV_USER_EMAIL=you@example.com pnpm dev
+DEV_USER_ID=local-user DEV_USER_EMAIL=you@example.com pnpm dev
 ```
 
 После этого сайт обычно доступен по адресу `http://localhost:3000`.
@@ -194,10 +190,11 @@ pnpm cf-typegen
 ### Медиа-воркер `apps/home-courses-media`
 
 ```bash
-pnpm dev
-pnpm test
-pnpm deploy
-pnpm cf-typegen
+npm run dev
+npm test
+npm run typecheck
+npm run deploy
+npm run cf-typegen
 ```
 
 ## Публикация
@@ -206,7 +203,7 @@ pnpm cf-typegen
 
 ```bash
 cd apps/home-courses-media
-pnpm deploy
+npm run deploy
 ```
 
 Потом сайт:
@@ -216,10 +213,10 @@ cd apps/home-courses
 pnpm deploy
 ```
 
-Если используются подписанные ссылки, одинаковый секрет `MEDIA_SIGNING_SECRET` должен быть задан и в сайте, и в медиа-воркере.
+Перед публикацией одинаковый секрет `MEDIA_INTERNAL_TOKEN` должен быть задан в сайте и медиа-службе. Медиа-служба остаётся доступной только через служебную привязку.
 
 ## Важные замечания
 
 - Отслеживаемый `README.md` для `git` находится здесь, в корне репозитория.
 - Значимая часть данных живёт вне `git` только в `Cloudflare R2`, `Cloudflare D1` и в папке с тяжёлыми исходными медиа.
-- Внутренний `apps/home-courses/README.md` сейчас является стандартной заготовкой и не отражает реальное устройство проекта.
+- Автоматические проверки находятся в `.github/workflows/ci.yml`.

@@ -1,0 +1,55 @@
+name: Проверки
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  site:
+    name: Сайт
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/home-courses
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: apps/home-courses/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm build:opennext
+
+  media:
+    name: Раздача материалов
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/home-courses-media
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/home-courses-media/package-lock.json
+      - run: npm ci
+      - run: npm test -- --run
+      - run: npm run typecheck
+      - run: npm exec wrangler deploy -- --dry-run
+
+  migrations:
+    name: Миграции D1
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/verify-migrations.sh

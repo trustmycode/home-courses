@@ -19,16 +19,12 @@ const courseSlug = arg("course");
 const lessonSlug = arg("lesson");
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "..");
-// Базовый URL для медиа (из env или параметра)
-const MEDIA_BASE_URL = arg("media-base-url") || process.env.MEDIA_BASE_URL || process.env.NEXT_PUBLIC_MEDIA_BASE_URL || "";
-
 if (!courseSlug || !lessonSlug) {
   console.error(`Usage:
-node tools/render-lesson.mjs --course <courseSlug> --lesson <lessonSlug> [--bucket <r2BucketName>] [--media-base-url <url>]
+node tools/render-lesson.mjs --course <courseSlug> --lesson <lessonSlug> [--bucket <r2BucketName>]
 
 Example:
-node tools/render-lesson.mjs --course 01-anna-vladimirovna-stop-trevoga --lesson 01-lesson
-node tools/render-lesson.mjs --course 01-anna-vladimirovna-stop-trevoga --lesson 01-lesson --media-base-url https://home-courses-media.ourhomecources.workers.dev`);
+node tools/render-lesson.mjs --course 01-anna-vladimirovna-stop-trevoga --lesson 01-lesson`);
   process.exit(1);
 }
 
@@ -136,7 +132,7 @@ const processedPartsVideo = parts.map(part => {
     const isPrimary = primaryAssetId === assetId;
     const safeTitle = escapeHtml(title);
 
-    const mediaUrl = MEDIA_BASE_URL ? `${MEDIA_BASE_URL}/media/${a.r2Key}` : `/media/${a.r2Key}`;
+    const mediaUrl = `/media/${a.r2Key}`;
     // Добавляем пустые строки вокруг figure для правильного парсинга marked
     return `\n\n<figure class="asset asset-video my-6" data-asset-id="${assetId}" data-asset-type="video" data-required="${isPrimary ? "true" : "false"}">
       ${showTitle ? `<figcaption class="asset-title mb-2">${safeTitle}</figcaption>` : ""}
@@ -179,7 +175,7 @@ const processedPartsAudio = partsAudio.map(part => {
     const a = mustAsset(assetId);
     const safeTitle = escapeHtml(title);
 
-    const mediaUrl = MEDIA_BASE_URL ? `${MEDIA_BASE_URL}/media/${a.r2Key}` : `/media/${a.r2Key}`;
+    const mediaUrl = `/media/${a.r2Key}`;
     // Добавляем пустые строки вокруг figure для правильного парсинга marked
     return `\n\n<figure class="asset asset-audio my-6" data-asset-id="${assetId}" data-asset-type="audio">
       ${showTitle ? `<figcaption class="asset-title mb-2">${safeTitle}</figcaption>` : ""}
@@ -221,7 +217,7 @@ const processedPartsDownload = partsDownload.map(part => {
     const a = mustAsset(assetId);
     const safeTitle = escapeHtml(title);
 
-    const mediaUrl = MEDIA_BASE_URL ? `${MEDIA_BASE_URL}/media/${a.r2Key}` : `/media/${a.r2Key}`;
+    const mediaUrl = `/media/${a.r2Key}`;
     // Добавляем пустые строки вокруг div для правильного парсинга marked
     return `\n\n<div class="asset asset-download mt-4 mb-2" data-asset-id="${assetId}" data-asset-type="pdf">
       <a class="download-link" data-asset-id="${assetId}" href="${mediaUrl}" target="_blank" rel="noreferrer">${safeTitle}</a>
