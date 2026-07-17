@@ -1,5 +1,7 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { MEDIA_PATH_PREFIX } from "@/lib/constants";
+import { requireUserId } from "@/lib/access";
+import { NextResponse } from "next/server";
 
 function pick(req: Request, name: string, out: Headers) {
   const v = req.headers.get(name);
@@ -37,8 +39,15 @@ export async function GET(
   req: Request,
   { params }: { params: Promise<{ key: string[] }> }
 ) {
+  const userIdOrResponse = await requireUserId();
+  if (userIdOrResponse instanceof NextResponse) return userIdOrResponse;
+
   // Проксируем медиа через service binding на home-courses-media worker
   const { env } = await getCloudflareContext({ async: true });
+
+  if (!env.MEDIA_INTERNAL_TOKEN) {
+    return new Response("Служебная авторизация не настроена", { status: 503 });
+  }
 
   const { key: keyArray } = await params;
 
@@ -46,10 +55,11 @@ export async function GET(
   try {
     upstreamUrl = buildMediaUpstreamUrl(keyArray);
   } catch {
-    return new Response("Bad Request", { status: 400 });
+    return new Response("Некорректный путь", { status: 400 });
   }
 
   const h = new Headers();
+  h.set("authorization", `Bearer ${env.MEDIA_INTERNAL_TOKEN}`);
   // Range/ETag preconditions
   pick(req, "range", h);
   pick(req, "if-none-match", h);
@@ -57,16 +67,7 @@ export async function GET(
   pick(req, "if-match", h);
   pick(req, "if-unmodified-since", h);
 
-  // #region agent log
-  const proxyStartTime = Date.now();
-  const rangeHeader = req.headers.get("range");
-  // #endregion
-
   const res = await env.MEDIA.fetch(upstreamUrl, { method: "GET", headers: h });
-
-  // #region agent log
-  const proxyEndTime = Date.now();
-  // #endregion
 
   const out = new Headers();
 
@@ -88,27 +89,6 @@ export async function GET(
   // Если upstream вернул 206, передаем его дальше
   const status = res.status;
 
-  // #region agent log
-  // Логируем через console.log, так как это серверный код
-  console.log(JSON.stringify({
-    location: 'route.ts:83',
-    message: 'media proxy response',
-    data: {
-      key: keyArray.join('/'),
-      upstreamUrl,
-      status,
-      rangeHeader,
-      contentLength: res.headers.get('content-length'),
-      contentRange: res.headers.get('content-range'),
-      duration: proxyEndTime - proxyStartTime
-    },
-    timestamp: Date.now(),
-    sessionId: 'debug-session',
-    runId: 'run1',
-    hypothesisId: 'B'
-  }));
-  // #endregion
-
   // Убеждаемся, что body передается корректно для streaming
   return new Response(res.body, { status, headers: out });
 }
@@ -117,8 +97,15 @@ export async function HEAD(
   req: Request,
   { params }: { params: Promise<{ key: string[] }> }
 ) {
+  const userIdOrResponse = await requireUserId();
+  if (userIdOrResponse instanceof NextResponse) return userIdOrResponse;
+
   // Проксируем медиа через service binding на home-courses-media worker
   const { env } = await getCloudflareContext({ async: true });
+
+  if (!env.MEDIA_INTERNAL_TOKEN) {
+    return new Response("Служебная авторизация не настроена", { status: 503 });
+  }
 
   const { key: keyArray } = await params;
 
@@ -126,10 +113,11 @@ export async function HEAD(
   try {
     upstreamUrl = buildMediaUpstreamUrl(keyArray);
   } catch {
-    return new Response("Bad Request", { status: 400 });
+    return new Response("Некорректный путь", { status: 400 });
   }
 
   const h = new Headers();
+  h.set("authorization", `Bearer ${env.MEDIA_INTERNAL_TOKEN}`);
   // Range/ETag preconditions для HEAD
   pick(req, "if-none-match", h);
   pick(req, "if-modified-since", h);

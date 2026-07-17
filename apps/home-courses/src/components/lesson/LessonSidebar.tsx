@@ -26,8 +26,8 @@ export function LessonSidebar({ course, currentLessonSlug, courseSlug }: LessonS
         </Link>
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>Lessons</span>
-            <span>{course.lessons.length} total</span>
+            <span>Уроки</span>
+            <span>Всего: {course.lessons.length}</span>
           </div>
         </div>
       </div>

@@ -25,21 +25,20 @@ interface LessonContentProps {
 /**
  * Хук для трекинга прогресса медиа
  */
-function useMediaProgress(
-	lessonId: string,
-	initialProgress?: LessonProgressResponse | null
-) {
+function useMediaProgress(lessonId: string) {
 	const pendingPositions = useRef<Map<string, number>>(new Map());
 	const pendingDurations = useRef<Map<string, number>>(new Map());
+	const flushInFlight = useRef(false);
 	const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const isTrackingTime = useRef<boolean>(false);
 	const timeTrackingStart = useRef<number>(0);
 	const timeSpentDelta = useRef<number>(0);
 
 	const flushProgress = useCallback(async () => {
-		if (pendingPositions.current.size === 0) {
+		if (pendingPositions.current.size === 0 || flushInFlight.current) {
 			return;
 		}
+		flushInFlight.current = true;
 
 		const updates: Array<{
 			assetId: string;
@@ -65,13 +64,9 @@ function useMediaProgress(
 			}
 		}
 
-		pendingPositions.current.clear();
-		pendingDurations.current.clear();
-
-		// Отправляем обновления (можно батчить, но для простоты отправляем по одному)
-		for (const update of updates) {
-			try {
-				await fetch("/api/progress", {
+		try {
+			for (const update of updates) {
+				const response = await fetch("/api/progress", {
 					method: "PUT",
 					headers: { "Content-Type": "application/json" },
 					body: JSON.stringify({
@@ -83,9 +78,26 @@ function useMediaProgress(
 					}),
 					keepalive: true,
 				});
-			} catch (error) {
-				console.error("Failed to save progress:", error);
+				if (!response.ok) {
+					throw new Error(`Сервер отклонил сохранение: ${response.status}`);
+				}
+
+				const currentPosition = pendingPositions.current.get(update.assetId);
+				if (currentPosition !== undefined && Math.floor(currentPosition) === update.positionSeconds) {
+					pendingPositions.current.delete(update.assetId);
+				}
+				const currentDuration = pendingDurations.current.get(update.assetId);
+				if (
+					currentDuration !== undefined &&
+					Math.floor(currentDuration) === update.durationSeconds
+				) {
+					pendingDurations.current.delete(update.assetId);
+				}
 			}
+		} catch (error) {
+			console.error("Не удалось сохранить прогресс", error);
+		} finally {
+			flushInFlight.current = false;
 		}
 	}, [lessonId]);
 
@@ -179,15 +191,17 @@ function useMediaProgress(
 		};
 	}, []);
 
-	return {
-		updatePosition: (assetId: string, positionSec: number) => {
+	const updatePosition = useCallback((assetId: string, positionSec: number) => {
 			pendingPositions.current.set(assetId, positionSec);
-		},
-		updateDuration: (assetId: string, durationSec: number) => {
+	}, []);
+
+	const updateDuration = useCallback((assetId: string, durationSec: number) => {
 			pendingDurations.current.set(assetId, durationSec);
-		},
-		markCompleted: async (assetId: string) => {
-			await fetch("/api/progress", {
+	}, []);
+
+	const markCompleted = useCallback(async (assetId: string) => {
+		try {
+			const response = await fetch("/api/progress", {
 				method: "PUT",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
@@ -196,7 +210,16 @@ function useMediaProgress(
 					completed: true,
 				}),
 			});
-		},
+			if (!response.ok) throw new Error(`Сервер отклонил сохранение: ${response.status}`);
+		} catch (error) {
+			console.error("Не удалось отметить материал завершённым", error);
+		}
+	}, [lessonId]);
+
+	return {
+		updatePosition,
+		updateDuration,
+		markCompleted,
 	};
 }
 
@@ -208,8 +231,7 @@ export function LessonContent({
 	const containerRef = useRef<HTMLDivElement>(null);
 	const [errorAssetId, setErrorAssetId] = useState<string | null>(null);
 	const { updatePosition, updateDuration, markCompleted } = useMediaProgress(
-		lessonId,
-		initialProgress
+		lessonId
 	);
 
 	// Восстанавливаем позиции и настраиваем трекинг
@@ -455,7 +477,7 @@ export function LessonContent({
 				/>
 			</div>
 			{errorAssetId && (
-				<MediaErrorToast assetId={errorAssetId} onRetry={handleRetry} />
+				<MediaErrorToast onRetry={handleRetry} />
 			)}
 		</>
 	);

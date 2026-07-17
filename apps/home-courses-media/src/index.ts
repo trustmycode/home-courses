@@ -1,6 +1,6 @@
 export interface Env {
 	COURSE_MEDIA: R2Bucket;
-	MEDIA_SIGNING_SECRET: string;
+	MEDIA_INTERNAL_TOKEN: string;
 }
 
 type ParsedRange = { offset: number; length?: number } | { suffix: number };
@@ -21,7 +21,7 @@ function parseKey(url: URL) {
 function parseHttpRange(rangeHeader: string | null): ParsedRange | null {
 	if (!rangeHeader) return null;
 
-	if (!rangeHeader.startsWith('bytes=')) return null;
+	if (!rangeHeader.startsWith('bytes=')) throw new Error('Unsupported range unit');
 
 	const spec = rangeHeader.slice('bytes='.length).trim();
 
@@ -32,24 +32,24 @@ function parseHttpRange(rangeHeader: string | null): ParsedRange | null {
 	// suffix: bytes=-500
 	if (startStr === '' && endStr) {
 		const suffix = Number(endStr);
-		if (!Number.isFinite(suffix) || suffix <= 0) return null;
+		if (!Number.isFinite(suffix) || suffix <= 0) throw new Error('Invalid suffix range');
 		return { suffix };
 	}
 
 	// bytes=500- or bytes=500-999
 	if (startStr !== '') {
 		const offset = Number(startStr);
-		if (!Number.isFinite(offset) || offset < 0) return null;
+		if (!Number.isFinite(offset) || offset < 0) throw new Error('Invalid range offset');
 
 		if (!endStr) return { offset }; // to end
 
 		const end = Number(endStr);
-		if (!Number.isFinite(end) || end < offset) return null;
+		if (!Number.isFinite(end) || end < offset) throw new Error('Invalid range end');
 
 		return { offset, length: end - offset + 1 };
 	}
 
-	return null;
+	throw new Error('Invalid range');
 }
 
 function computeStartEnd(total: number, pr: ParsedRange): { start: number; end: number } {
@@ -64,110 +64,51 @@ function computeStartEnd(total: number, pr: ParsedRange): { start: number; end: 
 	return { start, end };
 }
 
-/**
- * Проверяет HMAC-SHA256 подпись для медиа-файла
- * @param key - R2 ключ медиа-файла
- * @param exp - Unix timestamp истечения подписи
- * @param sig - Base64url-encoded подпись
- * @param secret - Секретный ключ для проверки
- * @returns true если подпись валидна, false иначе
- */
-async function verify(key: string, exp: number, sig: string, secret: string): Promise<boolean> {
-	const data = `${key}:${exp}`;
+async function safeEqual(left: string, right: string): Promise<boolean> {
 	const encoder = new TextEncoder();
-	const keyBytes = encoder.encode(secret);
-	const dataBytes = encoder.encode(data);
-	
-	// Декодируем base64url подпись
-	const sigBytes = Uint8Array.from(
-		atob(sig.replace(/-/g, "+").replace(/_/g, "/")),
-		c => c.charCodeAt(0)
-	);
-	
-	const cryptoKey = await crypto.subtle.importKey(
-		"raw",
-		keyBytes,
-		{ name: "HMAC", hash: "SHA-256" },
-		false,
-		["verify"]
-	);
-	
-	return crypto.subtle.verify("HMAC", cryptoKey, sigBytes, dataBytes);
+	const [leftHash, rightHash] = await Promise.all([
+		crypto.subtle.digest('SHA-256', encoder.encode(left)),
+		crypto.subtle.digest('SHA-256', encoder.encode(right)),
+	]);
+	const leftBytes = new Uint8Array(leftHash);
+	const rightBytes = new Uint8Array(rightHash);
+	let difference = 0;
+	for (let index = 0; index < leftBytes.length; index += 1) {
+		difference |= leftBytes[index] ^ rightBytes[index];
+	}
+	return difference === 0;
 }
 
 export default {
 	async fetch(req: Request, env: Env): Promise<Response> {
+		if (req.method !== 'GET' && req.method !== 'HEAD') {
+			return new Response('Метод не поддерживается', {
+				status: 405,
+				headers: { allow: 'GET, HEAD' },
+			});
+		}
+
+		if (!env.MEDIA_INTERNAL_TOKEN) {
+			return new Response('Служебная авторизация не настроена', { status: 503 });
+		}
+		const authorization = req.headers.get('authorization') ?? '';
+		const [scheme, suppliedToken] = authorization.split(' ', 2);
+		if (
+			scheme?.toLowerCase() !== 'bearer' ||
+			!suppliedToken ||
+			!(await safeEqual(suppliedToken, env.MEDIA_INTERNAL_TOKEN))
+		) {
+			return new Response('Доступ запрещён', { status: 401 });
+		}
+
 		const url = new URL(req.url);
 		let key = parseKey(url);
 
-		if (!key) return new Response('Bad Request', { status: 400 });
+		if (!key) return new Response('Некорректный путь', { status: 400 });
 		
 		// Нормализуем ключ: убираем лишние слэши (parseKey уже убирает начальные)
 		key = key.replace(/\/+$/, "");
 		
-		// Логируем для отладки
-		console.log('Media request', { 
-			pathname: url.pathname, 
-			key, 
-			hasSecret: !!env.MEDIA_SIGNING_SECRET,
-			hasExp: !!url.searchParams.get("exp"),
-			hasSig: !!url.searchParams.get("sig")
-		});
-
-		// Проверка подписи только если секрет настроен И есть параметры exp/sig
-		// Если параметров нет - разрешаем публичный доступ (вариант B)
-		const expParam = url.searchParams.get("exp");
-		const sigParam = url.searchParams.get("sig");
-		
-		if (env.MEDIA_SIGNING_SECRET && expParam && sigParam) {
-			// Проверяем подпись только если есть оба параметра
-			const exp = parseInt(expParam, 10);
-			const now = Math.floor(Date.now() / 1000);
-			
-			// #region agent log
-			console.log(JSON.stringify({
-				location: 'index.ts:128',
-				message: 'signature check',
-				data: { key, exp, now, diff: now - exp, expired: now > exp },
-				timestamp: Date.now(),
-				sessionId: 'debug-session',
-				runId: 'run1',
-				hypothesisId: 'G'
-			}));
-			// #endregion
-			
-			// Проверяем, не истекла ли подпись
-			if (!Number.isFinite(exp) || now > exp) {
-				console.error('Link expired', { exp, now, diff: now - exp });
-				return new Response('Link expired', { status: 403 });
-			}
-			
-			// parseKey уже возвращает декодированный ключ из pathname
-			// Проверяем подпись для этого ключа
-			const isValid = await verify(key, exp, sigParam, env.MEDIA_SIGNING_SECRET);
-			if (!isValid) {
-				// Логируем для отладки
-				console.error('Signature verification failed', { 
-					key, 
-					exp, 
-					now,
-					expired: now > exp,
-					hasSecret: !!env.MEDIA_SIGNING_SECRET,
-					sigLength: sigParam.length,
-					sigPreview: sigParam.substring(0, 10) + '...'
-				});
-				return new Response('Invalid signature', { status: 403 });
-			}
-		} else {
-			// Публичный доступ (вариант B) - нет параметров подписи или секрет не настроен
-			console.log('Public media access (no signature required)', { 
-				key, 
-				hasSecret: !!env.MEDIA_SIGNING_SECRET,
-				hasExp: !!expParam,
-				hasSig: !!sigParam
-			});
-		}
-
 		let pr: ParsedRange | null = null;
 		try {
 			pr = parseHttpRange(req.headers.get('range'));
@@ -176,52 +117,24 @@ export default {
 			return new Response('Range Not Satisfiable', { status: 416 });
 		}
 
-		// #region agent log
-		const r2StartTime = Date.now();
-		const rangeHeader = req.headers.get('range');
-		console.log(JSON.stringify({
-			location: 'index.ts:168',
-			message: 'R2 get before',
-			data: { key, range: pr, rangeHeader },
-			timestamp: Date.now(),
-			sessionId: 'debug-session',
-			runId: 'run1',
-			hypothesisId: 'C'
-		}));
-		// #endregion
-
 		// parseKey уже возвращает декодированный ключ, используем его напрямую для R2
 		const obj = await env.COURSE_MEDIA.get(key, pr ? { range: pr } : {});
 
-		// #region agent log
-		const r2EndTime = Date.now();
-		console.log(JSON.stringify({
-			location: 'index.ts:170',
-			message: 'R2 get after',
-			data: { key, found: !!obj, size: obj?.size, duration: r2EndTime - r2StartTime },
-			timestamp: Date.now(),
-			sessionId: 'debug-session',
-			runId: 'run1',
-			hypothesisId: 'C'
-		}));
-		// #endregion
-
-		if (!obj) return new Response('Not Found', { status: 404 });
+		if (!obj) return new Response('Файл не найден', { status: 404 });
 
 		if (!('body' in obj)) return new Response(null, { status: 412 });
 
 		const total = Number(obj.size);
 		if (!Number.isFinite(total) || total <= 0) {
-			console.log('Bad obj.size', { key, size: obj.size });
-			return new Response('Bad media metadata', { status: 500 });
+			console.error('Некорректный размер объекта R2', { key, size: obj.size });
+			return new Response('Некорректные метаданные файла', { status: 500 });
 		}
 
 		const headers = new Headers();
 		obj.writeHttpMetadata(headers);
 		headers.set('etag', obj.httpEtag);
 		headers.set('accept-ranges', 'bytes');
-		// Публичный кэш для варианта B (1 час)
-		headers.set('cache-control', 'public, max-age=3600');
+		headers.set('cache-control', 'private, max-age=3600');
 
 		// [Best Practice] иногда помогает убрать HTTP/3-переиспользование через Alt-Svc
 		headers.set('alt-svc', 'clear');
@@ -247,18 +160,6 @@ export default {
 			headers.set('content-range', `bytes ${start}-${end}/${total}`);
 			headers.set('content-length', String(len));
 
-			// #region agent log
-			console.log(JSON.stringify({
-				location: 'index.ts:214',
-				message: 'Range response',
-				data: { key, start, end, len, total, method: req.method },
-				timestamp: Date.now(),
-				sessionId: 'debug-session',
-				runId: 'run1',
-				hypothesisId: 'D'
-			}));
-			// #endregion
-
 			// HEAD поддержи (полезно для дебага/плееров)
 			if (req.method === 'HEAD') return new Response(null, { status: 206, headers });
 
@@ -272,4 +173,3 @@ export default {
 		return new Response(obj.body, { status: 200, headers });
 	},
 };
-

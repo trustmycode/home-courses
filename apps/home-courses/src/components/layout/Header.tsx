@@ -37,7 +37,7 @@ export function Header({
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
             <GraduationCap className="h-5 w-5 text-primary-foreground" />
           </div>
-          <span className="hidden sm:inline">Course Viewer</span>
+          <span className="hidden sm:inline">Домашние курсы</span>
         </Link>
 
         {onSearchChange && (

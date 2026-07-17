@@ -28,5 +28,4 @@ CREATE TABLE IF NOT EXISTS media_progress (
   FOREIGN KEY (lesson_id) REFERENCES lessons(lesson_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_media_progress_lesson
-  ON media_progress(user_id, lesson_id, updated_at DESC);
+-- Индекс создаётся миграцией 0004 после перестроения ранней таблицы из 0002.

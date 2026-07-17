@@ -1,41 +1,66 @@
-import { env, createExecutionContext, waitOnExecutionContext, SELF } from 'cloudflare:test';
-import { describe, it, expect } from 'vitest';
-import worker from '../src';
+import { env } from "cloudflare:test";
+import { beforeEach, describe, expect, it } from "vitest";
+import worker, { type Env } from "../src";
 
-describe('Hello World user worker', () => {
-	describe('request for /message', () => {
-		it('/ responds with "Hello, World!" (unit style)', async () => {
-			const request = new Request<unknown, IncomingRequestCfProperties>('http://example.com/message');
-			// Create an empty context to pass to `worker.fetch()`.
-			const ctx = createExecutionContext();
-			const response = await worker.fetch(request, env, ctx);
-			// Wait for all `Promise`s passed to `ctx.waitUntil()` to settle before running test assertions
-			await waitOnExecutionContext(ctx);
-			expect(await response.text()).toMatchInlineSnapshot(`"Hello, World!"`);
-		});
+const TOKEN = "test-only-internal-token";
+const KEY = "tests/sample.txt";
+const CONTENT = "0123456789";
 
-		it('responds with "Hello, World!" (integration style)', async () => {
-			const request = new Request('http://example.com/message');
-			const response = await SELF.fetch(request);
-			expect(await response.text()).toMatchInlineSnapshot(`"Hello, World!"`);
-		});
-	});
+function request(
+  path = `/media/${KEY}`,
+  init: RequestInit = {},
+  token = TOKEN
+): Promise<Response> {
+  const headers = new Headers(init.headers);
+  if (token) headers.set("authorization", `Bearer ${token}`);
+  const testEnv: Env = {
+    COURSE_MEDIA: env.COURSE_MEDIA,
+    MEDIA_INTERNAL_TOKEN: TOKEN,
+  };
+  return worker.fetch(new Request(`https://media.internal${path}`, { ...init, headers }), testEnv);
+}
 
-	describe('request for /random', () => {
-		it('/ responds with a random UUID (unit style)', async () => {
-			const request = new Request<unknown, IncomingRequestCfProperties>('http://example.com/random');
-			// Create an empty context to pass to `worker.fetch()`.
-			const ctx = createExecutionContext();
-			const response = await worker.fetch(request, env, ctx);
-			// Wait for all `Promise`s passed to `ctx.waitUntil()` to settle before running test assertions
-			await waitOnExecutionContext(ctx);
-			expect(await response.text()).toMatch(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/);
-		});
+describe("раздача материалов", () => {
+  beforeEach(async () => {
+    await env.COURSE_MEDIA.put(KEY, CONTENT, {
+      httpMetadata: { contentType: "text/plain; charset=utf-8" },
+    });
+  });
 
-		it('responds with a random UUID (integration style)', async () => {
-			const request = new Request('http://example.com/random');
-			const response = await SELF.fetch(request);
-			expect(await response.text()).toMatch(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/);
-		});
-	});
+  it("закрывается при отсутствии служебного ключа", async () => {
+    const response = await worker.fetch(
+      new Request(`https://media.internal/media/${KEY}`),
+      { COURSE_MEDIA: env.COURSE_MEDIA, MEDIA_INTERNAL_TOKEN: "" }
+    );
+    expect(response.status).toBe(503);
+  });
+
+  it("отклоняет отсутствующий и неверный ключ", async () => {
+    expect((await request(undefined, {}, "")).status).toBe(401);
+    expect((await request(undefined, {}, "wrong-token")).status).toBe(401);
+  });
+
+  it("возвращает полный файл с закрытым кэшированием", async () => {
+    const response = await request();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("private, max-age=3600");
+    expect(await response.text()).toBe(CONTENT);
+  });
+
+  it("поддерживает частичный запрос и HEAD", async () => {
+    const partial = await request(undefined, { headers: { range: "bytes=2-5" } });
+    expect(partial.status).toBe(206);
+    expect(partial.headers.get("content-range")).toBe("bytes 2-5/10");
+    expect(await partial.text()).toBe("2345");
+
+    const head = await request(undefined, { method: "HEAD" });
+    expect(head.status).toBe(200);
+    expect(head.headers.get("content-length")).toBe("10");
+    expect(await head.text()).toBe("");
+  });
+
+  it("отклоняет некорректный диапазон и неподдерживаемый метод", async () => {
+    expect((await request(undefined, { headers: { range: "bytes=bad" } })).status).toBe(416);
+    expect((await request(undefined, { method: "POST" })).status).toBe(405);
+  });
 });

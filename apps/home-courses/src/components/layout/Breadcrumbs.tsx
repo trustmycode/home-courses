@@ -17,13 +17,13 @@ interface BreadcrumbsProps {
 export function Breadcrumbs({ items, className }: BreadcrumbsProps) {
   return (
     <nav 
-      aria-label="Breadcrumb" 
+      aria-label="Навигационная цепочка"
       className={cn("flex items-center gap-1.5 text-sm", className)}
     >
       <Link 
         href="/" 
         className="text-muted-foreground hover:text-foreground transition-colors"
-        aria-label="Home"
+        aria-label="Главная"
       >
         <Home className="h-4 w-4" />
       </Link>

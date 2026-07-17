@@ -2,11 +2,15 @@
   "name": "web",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.9.0",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint . --max-warnings=0",
     "build:opennext": "pnpm run build && opennextjs-cloudflare build --skipNextBuild",
     "deploy": "pnpm run build:opennext && WRANGLER_REMOTE_PROTOCOL=direct wrangler deploy",
     "deploy:ci": "pnpm run build:opennext && wrangler deploy",
@@ -16,7 +20,7 @@
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
-    "@opennextjs/cloudflare": "^1.14.4",
+    "@opennextjs/cloudflare": "1.20.1",
     "@radix-ui/react-accordion": "^1.2.11",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-aspect-ratio": "^1.1.8",
@@ -52,13 +56,14 @@
     "input-otp": "^1.4.2",
     "lucide-react": "^0.462.0",
     "marked": "^17.0.1",
-    "next": "15.5.9",
+    "next": "15.5.18",
     "react": "19.1.4",
     "react-day-picker": "^9.6.7",
     "react-dom": "19.1.4",
     "react-hook-form": "^7.68.0",
     "react-resizable-panels": "^3.0.6",
     "recharts": "^3.6.0",
+    "sanitize-html": "^2.17.0",
     "sonner": "^2.0.7",
     "tailwind-merge": "^2.6.0",
     "vaul": "^1.1.2"
@@ -69,11 +74,12 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/sanitize-html": "^2.16.0",
     "eslint": "^9",
-    "eslint-config-next": "15.4.6",
+    "eslint-config-next": "15.5.18",
     "tailwindcss": "^4",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5",
-    "wrangler": "^4.54.0"
+    "wrangler": "4.110.0"
   }
 }

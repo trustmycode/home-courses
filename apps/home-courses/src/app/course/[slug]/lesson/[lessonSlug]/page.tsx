@@ -11,7 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { requireUserId } from "@/lib/access";
+import { getUserIdOrNull } from "@/lib/access";
+import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,8 @@ export default async function LessonPage({
 }: {
   params: Promise<{ slug: string; lessonSlug: string }>;
 }) {
+  const authenticatedUserId = await getUserIdOrNull();
+  if (!authenticatedUserId) notFound();
   const { slug, lessonSlug } = await params;
   const course = await loadCourse(slug);
   const lesson = await loadLesson(slug, lessonSlug);
@@ -29,7 +32,7 @@ export default async function LessonPage({
       <div className="min-h-screen bg-background">
         <Header />
         <main className="container mx-auto px-4 py-8">
-          <p className="text-muted-foreground">Lesson not found</p>
+          <p className="text-muted-foreground">Урок не найден</p>
         </main>
       </div>
     );
@@ -43,9 +46,6 @@ export default async function LessonPage({
   // Загружаем прогресс урока напрямую из БД
   let initialProgress = null;
   try {
-    const userIdOrResponse = await requireUserId();
-    if (!(userIdOrResponse instanceof Response)) {
-      const userId = userIdOrResponse;
       const { env } = await getCloudflareContext({ async: true });
       
       // Загружаем прогресс всех ассетов урока
@@ -55,7 +55,7 @@ export default async function LessonPage({
            FROM media_progress
            WHERE user_id=? AND lesson_id=?`
         )
-        .bind(userId, lessonId)
+        .bind(authenticatedUserId, lessonId)
         .all<{
           asset_id: string;
           position_seconds: number;
@@ -87,9 +87,8 @@ export default async function LessonPage({
         lessonId,
         assets,
       };
-    }
   } catch (error) {
-    console.error("Failed to load lesson progress:", error);
+    console.error("Не удалось загрузить прогресс урока", error);
     // Продолжаем без прогресса
   }
 
@@ -120,7 +119,7 @@ export default async function LessonPage({
               {lesson.title}
             </p>
             <p className="text-xs text-muted-foreground">
-              Lesson {currentIndex + 1} of {sortedLessons.length}
+              Урок {currentIndex + 1} из {sortedLessons.length}
             </p>
           </div>
 
@@ -132,7 +131,7 @@ export default async function LessonPage({
             </SheetTrigger>
             <SheetContent side="right" className="w-80 p-0">
               <div className="flex items-center justify-between p-4 border-b border-border">
-                <h3 className="font-semibold text-foreground">Lessons</h3>
+                <h3 className="font-semibold text-foreground">Уроки</h3>
               </div>
               <LessonSidebar 
                 course={course} 
@@ -153,7 +152,7 @@ export default async function LessonPage({
               <Button variant="ghost" size="sm" asChild className="w-full justify-start text-muted-foreground hover:text-foreground">
                 <Link href={`/course/${course.slug}`}>
                   <ChevronLeft className="h-4 w-4 mr-2" />
-                  Back to Lessons
+                  Вернуться к урокам
                 </Link>
               </Button>
             </div>
@@ -171,7 +170,7 @@ export default async function LessonPage({
             {/* Breadcrumbs (desktop) */}
             <Breadcrumbs 
               items={[
-                { label: "Courses", href: "/" },
+                { label: "Курсы", href: "/" },
                 { label: course.title, href: `/course/${course.slug}` },
                 { label: lesson.title }
               ]}
@@ -182,7 +181,7 @@ export default async function LessonPage({
             <div className="mb-6">
               <div className="flex items-center gap-2 mb-2">
                 <Badge variant="outline" className="text-xs">
-                  Lesson {currentIndex + 1}
+                  Урок {currentIndex + 1}
                 </Badge>
               </div>
               <h1 className="text-2xl lg:text-3xl font-bold text-foreground">
